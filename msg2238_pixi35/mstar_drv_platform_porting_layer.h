@@ -108,9 +108,9 @@
 #define MS_TS_MSG_IC_GPIO_INT   GPIO_TOUCH_IRQ   //52 //37
 
 #ifdef CONFIG_TP_HAVE_KEY
-#define TOUCH_KEY_MENU (139) //229
-#define TOUCH_KEY_HOME (172) //102
-#define TOUCH_KEY_BACK (158)
+#define TOUCH_KEY_MENU (158) //229
+#define TOUCH_KEY_HOME (139) //102
+#define TOUCH_KEY_BACK (172)
 #define TOUCH_KEY_SEARCH (217)
 
 #define MAX_KEY_NUM (4)
@@ -123,9 +123,9 @@
 #define MS_TS_MSG_IC_GPIO_INT   1
 
 #ifdef CONFIG_TP_HAVE_KEY
-#define TOUCH_KEY_MENU (139) //229
-#define TOUCH_KEY_HOME (172) //102
-#define TOUCH_KEY_BACK (158)
+#define TOUCH_KEY_MENU (158) //229
+#define TOUCH_KEY_HOME (139) //102
+#define TOUCH_KEY_BACK (172)
 //#define TOUCH_KEY_SEARCH (217)
 
 #define MAX_KEY_NUM (3)
