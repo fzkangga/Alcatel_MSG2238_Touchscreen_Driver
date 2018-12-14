@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
  
@@ -36,27 +37,13 @@
 /*=============================================================*/
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-extern u32 g_GestureWakeupMode[2];
+extern u16 g_GestureWakeupMode;
 extern u8 g_GestureWakeupFlag;
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
 /*=============================================================*/
 // GLOBAL FUNCTION DEFINITION
 /*=============================================================*/
-
-void DrvIcFwLyrVariableInitialize(void)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    DrvFwCtrlVariableInitialize();
-}
-
-void DrvIcFwLyrOptimizeCurrentConsumption(void)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    DrvFwCtrlOptimizeCurrentConsumption();
-}
 
 u8 DrvIcFwLyrGetChipType(void)
 {
@@ -86,13 +73,6 @@ s32 DrvIcFwLyrUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmemType)
     return DrvFwCtrlUpdateFirmware(szFwData, eEmemType);
 }	
 
-s32 DrvIcFwLyrUpdateFirmwareBySdCard(const char *pFilePath)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    return DrvFwCtrlUpdateFirmwareBySdCard(pFilePath);
-}
-
 u32 DrvIcFwLyrIsRegisterFingerTouchInterruptHandler(void)
 {
     DBG("*** %s() ***\n", __func__);
@@ -111,11 +91,11 @@ void DrvIcFwLyrHandleFingerTouch(u8 *pPacket, u16 nLength)
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
 
-void DrvIcFwLyrOpenGestureWakeup(u32 *pWakeupMode)
+void DrvIcFwLyrOpenGestureWakeup(u16 nWakeupMode)
 {
-//    DBG("*** %s() ***\n", __func__);
+    DBG("*** %s() ***\n", __func__);
 
-    DrvFwCtrlOpenGestureWakeup(pWakeupMode);
+    DrvFwCtrlOpenGestureWakeup(nWakeupMode);
 }	
 
 void DrvIcFwLyrCloseGestureWakeup(void)
@@ -125,48 +105,20 @@ void DrvIcFwLyrCloseGestureWakeup(void)
     DrvFwCtrlCloseGestureWakeup();
 }	
 
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-void DrvIcFwLyrOpenGestureDebugMode(u8 nGestureFlag)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    DrvFwCtrlOpenGestureDebugMode(nGestureFlag);
-}
-
-void DrvIcFwLyrCloseGestureDebugMode(void)
-{
-//	  DBG("*** %s() ***\n", __func__);
-
-    DrvFwCtrlCloseGestureDebugMode();
-}
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
-
-u32 DrvIcFwLyrReadDQMemValue(u16 nAddr)
-{
-//	  DBG("*** %s() ***\n", __func__);
-
-    return DrvFwCtrlReadDQMemValue(nAddr);
-}
-
-void DrvIcFwLyrWriteDQMemValue(u16 nAddr, u32 nData)
-{
-//	  DBG("*** %s() ***\n", __func__);
-
-    DrvFwCtrlWriteDQMemValue(nAddr, nData);
-}
 
 //------------------------------------------------------------------------------//
 
-#if defined(CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC) // use for MSG26XXM only
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+
+#if defined(CONFIG_ENABLE_CHIP_MSG26XXM)
 u16 DrvIcFwLyrGetFirmwareMode(void)
 {
 //    DBG("*** %s() ***\n", __func__);
 
     return DrvFwCtrlGetFirmwareMode();
 }
-#endif //CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC
+#endif //CONFIG_ENABLE_CHIP_MSG26XXM
 
 u16 DrvIcFwLyrChangeFirmwareMode(u16 nMode)
 {
@@ -188,6 +140,8 @@ void DrvIcFwLyrRestoreFirmwareModeToLogDataMode(void)
 
     DrvFwCtrlRestoreFirmwareModeToLogDataMode();
 }	
+
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
 //------------------------------------------------------------------------------//
 
@@ -238,76 +192,15 @@ void DrvIcFwLyrGetMpTestDataLog(ItoTestMode_e eItoTestMode, u8 *pDataLog, u32 *p
 
     return DrvMpTestGetTestDataLog(eItoTestMode, pDataLog, pLength);
 }
-
-#if defined(CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC)
+//merged by pangle at 20150228 begin
+#if defined(CONFIG_ENABLE_CHIP_MSG26XXM)
 void DrvIcFwLyrGetMpTestScope(TestScopeInfo_t *pInfo)
 {
 //    DBG("*** %s() ***\n", __func__);
 
     return DrvMpTestGetTestScope(pInfo);
 }
-#endif //CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC
+#endif //CONFIG_ENABLE_CHIP_MSG26XXM
 
-#endif //CONFIG_ENABLE_ITO_MP_TEST		
-
-//------------------------------------------------------------------------------//
-
-#ifdef CONFIG_ENABLE_SEGMENT_READ_FINGER_TOUCH_DATA
-
-#if defined(CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC)
-void DrvIcFwLyrGetTouchPacketAddress(u16 *pDataAddress, u16 *pFlagAddress)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    return DrvFwCtrlGetTouchPacketAddress(pDataAddress, pFlagAddress);
-}
-#endif //CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC
-
-#endif //CONFIG_ENABLE_SEGMENT_READ_FINGER_TOUCH_DATA
-
-//------------------------------------------------------------------------------//
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-
-s32 DrvIcFwLyrEnableProximity(void)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    return DrvFwCtrlEnableProximity();
-}
-
-s32 DrvIcFwLyrDisableProximity(void)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    return DrvFwCtrlDisableProximity();
-}
-
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
-//------------------------------------------------------------------------------//
-
-#ifdef CONFIG_ENABLE_GLOVE_MODE
-void DrvIcFwLyrOpenGloveMode(void)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    DrvIcFwCtrlOpenGloveMode();
-}
-
-void DrvIcFwLyrCloseGloveMode(void)
-{
-//	  DBG("*** %s() ***\n", __func__);
-    DrvIcFwCtrlCloseGloveMode();
-}
-
-void DrvIcFwLyrGetGloveInfo(u8 *pGloveMode)
-{
-//    DBG("*** %s() ***\n", __func__);
-
-    DrvIcFwCtrlGetGloveInfo(pGloveMode);
-}
-#endif //CONFIG_ENABLE_GLOVE_MODE
-//------------------------------------------------------------------------------//
-
-
+#endif //CONFIG_ENABLE_ITO_MP_TEST
+//merged by pangle at 20150228 end		

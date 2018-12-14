@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,9 +21,10 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
-
+// merged new driver by pangle form QL701 at 20150228
 /*=============================================================*/
 // INCLUDE FILE
 /*=============================================================*/
@@ -34,78 +35,74 @@
 #include "mstar_drv_platform_porting_layer.h"
 #include "mstar_drv_ic_fw_porting_layer.h"
 
-#if defined(CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC)
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA) || defined(CONFIG_ENABLE_CHIP_MSG22XX)
 #ifdef CONFIG_ENABLE_ITO_MP_TEST
 
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
 // Modify.
-/*#include "msg21xxa_open_test_ANA1_X.h"
-#include "msg21xxa_open_test_ANA2_X.h"
-#include "msg21xxa_open_test_ANA1_B_X.h"
-#include "msg21xxa_open_test_ANA2_B_X.h"
-#include "msg21xxa_open_test_ANA3_X.h"
+#include "open_test_ANA1_X.h"
+#include "open_test_ANA2_X.h"
+#include "open_test_ANA1_B_X.h"
+#include "open_test_ANA2_B_X.h"
+#include "open_test_ANA3_X.h"
 
-#include "msg21xxa_open_test_ANA1_Y.h"
-#include "msg21xxa_open_test_ANA2_Y.h"
-#include "msg21xxa_open_test_ANA1_B_Y.h"
-#include "msg21xxa_open_test_ANA2_B_Y.h"
-#include "msg21xxa_open_test_ANA3_Y.h"
+#include "open_test_ANA1_Y.h"
+#include "open_test_ANA2_Y.h"
+#include "open_test_ANA1_B_Y.h"
+#include "open_test_ANA2_B_Y.h"
+#include "open_test_ANA3_Y.h"
 
 // Modify.
-#include "msg21xxa_short_test_ANA1_X.h"
-#include "msg21xxa_short_test_ANA2_X.h"
-#include "msg21xxa_short_test_ANA3_X.h"
+#include "short_test_ANA1_X.h"
+#include "short_test_ANA2_X.h"
+#include "short_test_ANA3_X.h"
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE  
-#include "msg21xxa_short_test_ANA4_X.h"
+#include "short_test_ANA4_X.h"
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
 
-#include "msg21xxa_short_test_ANA1_Y.h"
-#include "msg21xxa_short_test_ANA2_Y.h"
-#include "msg21xxa_short_test_ANA3_Y.h"
+#include "short_test_ANA1_Y.h"
+#include "short_test_ANA2_Y.h"
+#include "short_test_ANA3_Y.h"
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE  
-#include "msg21xxa_short_test_ANA4_Y.h"
+#include "short_test_ANA4_Y.h"
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-*/
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
 // Modify.
-#include "msg22xx_open_test_RIU1_YEJI.h"
-#include "msg22xx_open_test_RIU2_YEJI.h"
-#include "msg22xx_open_test_RIU3_YEJI.h"
+#include "open_test_RIU1_mtto.h"
+#include "open_test_RIU2_mtto.h"
+#include "open_test_RIU3_mtto.h"
 
-/*#include "msg22xx_open_test_RIU1_Y.h"
-#include "msg22xx_open_test_RIU2_Y.h"
-#include "msg22xx_open_test_RIU3_Y.h"*/
+//#include "open_test_RIU1_undefine.h"
+//#include "open_test_RIU2_undefine.h"
+//#include "open_test_RIU3_undefine.h"
 
 // Modify.
-#include "msg22xx_short_test_RIU1_YEJI.h"
-#include "msg22xx_short_test_RIU2_YEJI.h"
-#include "msg22xx_short_test_RIU3_YEJI.h"
+#include "short_test_RIU1_mtto.h"
+#include "short_test_RIU2_mtto.h"
+#include "short_test_RIU3_mtto.h"
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE  
-#include "msg22xx_short_test_RIU4_YEJI.h"
+#include "short_test_RIU4_mtto.h"
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
 
-/*#include "msg22xx_short_test_RIU1_Y.h"
-#include "msg22xx_short_test_RIU2_Y.h"
-#include "msg22xx_short_test_RIU3_Y.h"
+//#include "short_test_RIU1_undefine.h"
+//#include "short_test_RIU2_undefine.h"
+//#include "short_test_RIU3_undefine.h"
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE  
-#include "msg22xx_short_test_RIU4_Y.h"
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE*/
-
+//#include "short_test_RIU4_undefine.h"
+#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+#endif
 
 /*=============================================================*/
 // PREPROCESSOR CONSTANT DEFINITION
 /*=============================================================*/
 
 // Modify.
-#define TP_OF_YEJI    (5) //(2)
+#define TP_OF_X    (1) //(2)
 #define TP_OF_Y    (4)
 
 /*=============================================================*/
 // EXTERN VARIABLE DECLARATION
 /*=============================================================*/
-
-extern u32 SLAVE_I2C_ID_DBBUS;
-extern u32 SLAVE_I2C_ID_DWI2C;
-
-extern u8 g_ChipType;
 
 extern struct i2c_client *g_I2cClient;
 extern struct mutex g_Mutex;
@@ -134,20 +131,12 @@ static s8 _gDataFlag2[MAX_CHANNEL_NUM] = {0};
 static s8 _gDataFlag3[MAX_CHANNEL_NUM] = {0};
 static s8 _gDataFlag4[MAX_CHANNEL_NUM] = {0};
 
-//add by mike.li for rawdata_show[2015.06.30]
-static s16 _gRawData1_open[MAX_CHANNEL_NUM] = {0};
-static s16 _gRawData2_open[MAX_CHANNEL_NUM] = {0};
-static s8 _gDataFlag1_open[MAX_CHANNEL_NUM] = {0};
-static s8 _gDataFlag2_open[MAX_CHANNEL_NUM] = {0};
-static u8 _gTestFailChannel_open[MAX_CHANNEL_NUM] = {0};
-static u32 _gTestFailChannelCount_open = 0;
-//add end
-
 static u8 _gItoTestKeyNum = 0;
 static u8 _gItoTestDummyNum = 0;
 static u8 _gItoTestTriangleNum = 0;
 static u8 _gIsEnable2R = 0;
 
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
 
 static u8 _gLTP = 1;	
 
@@ -172,7 +161,7 @@ static u16 *_gShort_3_GPO = NULL;
 static u16 *_gShort_4 = NULL;
 static u16 *_gShort_4_GPO = NULL;
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
 
 static u8 _gIsOldFirmwareVersion = 0;
 
@@ -198,7 +187,7 @@ static u8 _gShortSubFrameNum3 = 0;
 static u32 *_gShort_RIU4 = NULL;
 static u8 _gShortSubFrameNum4 = 0;
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
+#endif
 
 static u8 *_gMAP1 = NULL;
 static u8 *_gMAP2 = NULL;
@@ -232,14 +221,14 @@ ItoTestResult_e _gItoTestResult = ITO_TEST_OK;
 /*=============================================================*/
 // LOCAL FUNCTION DEFINITION
 /*=============================================================*/
-
+/*
 static u16 _DrvMpTestItoTestGetTpType(void)
 {
     u16 nMajor = 0, nMinor = 0;
 
     DBG("*** %s() ***\n", __func__);
         
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
     {
         u8 szDbBusTxData[3] = {0};
         u8 szDbBusRxData[4] = {0};
@@ -254,7 +243,7 @@ static u16 _DrvMpTestItoTestGetTpType(void)
         nMajor = (szDbBusRxData[1]<<8) + szDbBusRxData[0];
         nMinor = (szDbBusRxData[3]<<8) + szDbBusRxData[2];
     }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
     {
         u16 nRegData1, nRegData2;
 
@@ -275,12 +264,16 @@ static u16 _DrvMpTestItoTestGetTpType(void)
         // RIU password
         RegSet16BitValue(0x161A, 0xABBA); 
 
+        // Clear pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
 
         RegSet16BitValue(0x1600, 0xBFF4); // Set start address for customer firmware version on main block
     
         // Enable burst mode
 //        RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
 
+        // Set pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
     
         RegSetLByteValue(0x160E, 0x01); 
 
@@ -305,13 +298,14 @@ static u16 _DrvMpTestItoTestGetTpType(void)
         DrvPlatformLyrTouchDeviceResetHw();
         mdelay(100);
     }
+#endif    
 
     DBG("*** major = %d ***\n", nMajor);
     DBG("*** minor = %d ***\n", nMinor);
     
     return nMajor;
 }
-
+*/
 static u16 _DrvMpTestItoTestChooseTpType(void)
 {
     u16 nTpType = 0;
@@ -319,53 +313,50 @@ static u16 _DrvMpTestItoTestChooseTpType(void)
     
     DBG("*** %s() ***\n", __func__);
 
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)   
-    {
-        // _gOpen1~_gOpen3 are for MSG21XXA
-        _gOpen1 = NULL;
-        _gOpen1B = NULL;
-        _gOpen2 = NULL;
-        _gOpen2B = NULL;
-        _gOpen3 = NULL;
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    // _gOpen1~_gOpen3 are for MSG21XXA
+    _gOpen1 = NULL;
+    _gOpen1B = NULL;
+    _gOpen2 = NULL;
+    _gOpen2B = NULL;
+    _gOpen3 = NULL;
 
-        // _gShort_1~_gShort_4 are for MSG21XXA
-        _gShort_1 = NULL;
-        _gShort_2 = NULL;
-        _gShort_3 = NULL;
+    // _gShort_1~_gShort_4 are for MSG21XXA
+    _gShort_1 = NULL;
+    _gShort_2 = NULL;
+    _gShort_3 = NULL;
 
-        _gShort_1_GPO = NULL;
-        _gShort_2_GPO = NULL;
-        _gShort_3_GPO = NULL;
-
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-        _gShort_4 = NULL;
-        _gShort_4_GPO = NULL;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)   
-    {
-        // _gOpenRIU1~_gOpenRIU3 are for MSG22XX
-        _gOpenRIU1 = NULL;
-        _gOpenRIU2 = NULL;
-        _gOpenRIU3 = NULL;
-
-        // _gShort_RIU1~_gShort_RIU4 are for MSG22XX
-        _gShort_RIU1 = NULL;
-        _gShort_RIU2 = NULL;
-        _gShort_RIU3 = NULL;
-
-        _gOpenSubFrameNum1 = 0;
-        _gOpenSubFrameNum2 = 0;
-        _gOpenSubFrameNum3 = 0;
-        _gShortSubFrameNum1 = 0;
-        _gShortSubFrameNum2 = 0;
-        _gShortSubFrameNum3 = 0;
+    _gShort_1_GPO = NULL;
+    _gShort_2_GPO = NULL;
+    _gShort_3_GPO = NULL;
 
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-        _gShort_RIU4 = NULL;
-        _gShortSubFrameNum4 = 0;
+    _gShort_4 = NULL;
+    _gShort_4_GPO = NULL;
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-    }
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    // _gOpenRIU1~_gOpenRIU3 are for MSG22XX
+    _gOpenRIU1 = NULL;
+    _gOpenRIU2 = NULL;
+    _gOpenRIU3 = NULL;
+
+    // _gShort_RIU1~_gShort_RIU4 are for MSG22XX
+    _gShort_RIU1 = NULL;
+    _gShort_RIU2 = NULL;
+    _gShort_RIU3 = NULL;
+
+    _gOpenSubFrameNum1 = 0;
+    _gOpenSubFrameNum2 = 0;
+    _gOpenSubFrameNum3 = 0;
+    _gShortSubFrameNum1 = 0;
+    _gShortSubFrameNum2 = 0;
+    _gShortSubFrameNum3 = 0;
+
+#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+    _gShort_RIU4 = NULL;
+    _gShortSubFrameNum4 = 0;
+#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+#endif
 
     _gMAP1 = NULL;
     _gMAP2 = NULL;
@@ -395,10 +386,10 @@ static u16 _DrvMpTestItoTestChooseTpType(void)
 
     for (i = 0; i < 10; i ++)
     {
-        nTpType = _DrvMpTestItoTestGetTpType();
+        nTpType = TP_OF_X;//_DrvMpTestItoTestGetTpType();
         DBG("nTpType = %d, i = %d\n", nTpType, i);
 
-        if (TP_OF_YEJI == nTpType || TP_OF_Y == nTpType) // Modify.
+        if (TP_OF_X == nTpType || TP_OF_Y == nTpType) // Modify.
         {
             break;
         }
@@ -412,202 +403,136 @@ static u16 _DrvMpTestItoTestChooseTpType(void)
         }
     }
     
-    if (TP_OF_YEJI == nTpType) // Modify. 
+    if (TP_OF_X == nTpType) // Modify. 
     {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)   
-        {
-            /*_gOpen1 = MSG21XXA_open_1_X;
-            _gOpen1B = MSG21XXA_open_1B_X;
-            _gOpen2 = MSG21XXA_open_2_X;
-            _gOpen2B = MSG21XXA_open_2B_X;
-            _gOpen3 = MSG21XXA_open_3_X;
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        _gOpen1 = open_1_X;
+        _gOpen1B = open_1B_X;
+        _gOpen2 = open_2_X;
+        _gOpen2B = open_2B_X;
+        _gOpen3 = open_3_X;
 
-            _gShort_1 = MSG21XXA_short_1_X;
-            _gShort_2 = MSG21XXA_short_2_X;
-            _gShort_3 = MSG21XXA_short_3_X;
+        _gShort_1 = short_1_X;
+        _gShort_2 = short_2_X;
+        _gShort_3 = short_3_X;
 
-            _gShort_1_GPO = MSG21XXA_short_1_X_GPO;
-            _gShort_2_GPO = MSG21XXA_short_2_X_GPO;
-            _gShort_3_GPO = MSG21XXA_short_3_X_GPO;
-
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-            _gShort_4 = MSG21XXA_short_4_X;
-            _gShort_4_GPO = MSG21XXA_short_4_X_GPO;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
-            _gMAP1 = MSG21XXA_MAP1_X;
-            _gMAP2 = MSG21XXA_MAP2_X;
-            _gMAP3 = MSG21XXA_MAP3_X;
-            _gMAP40_1 = MSG21XXA_MAP40_1_X;
-            _gMAP40_2 = MSG21XXA_MAP40_2_X;
-            _gMAP41_1 = MSG21XXA_MAP41_1_X;
-            _gMAP41_2 = MSG21XXA_MAP41_2_X;
-
-            _gSHORT_MAP1 = MSG21XXA_SHORT_MAP1_X;
-            _gSHORT_MAP2 = MSG21XXA_SHORT_MAP2_X;
-            _gSHORT_MAP3 = MSG21XXA_SHORT_MAP3_X;
-
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE       
-            _gMAP40_3 = MSG21XXA_MAP40_3_X;
-            _gMAP40_4 = MSG21XXA_MAP40_4_X;
-            _gMAP41_3 = MSG21XXA_MAP41_3_X;
-            _gMAP41_4 = MSG21XXA_MAP41_4_X;
-
-            _gSHORT_MAP4 = MSG21XXA_SHORT_MAP4_X;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
- 
-            _gItoTestKeyNum = MSG21XXA_NUM_KEY_X;
-            _gItoTestDummyNum = MSG21XXA_NUM_DUMMY_X;
-            _gItoTestTriangleNum = MSG21XXA_NUM_SENSOR_X;
-            _gIsEnable2R = MSG21XXA_ENABLE_2R_X;*/
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)   
-        {
-            _gOpenRIU1 = MSG22XX_open_1_YEJI;
-            _gOpenRIU2 = MSG22XX_open_2_YEJI;
-            _gOpenRIU3 = MSG22XX_open_3_YEJI;
-
-            _gShort_RIU1 = MSG22XX_short_1_YEJI;
-            _gShort_RIU2 = MSG22XX_short_2_YEJI;
-            _gShort_RIU3 = MSG22XX_short_3_YEJI;
-
-            _gOpenSubFrameNum1 = MSG22XX_NUM_OPEN_1_SENSOR_YEJI;
-            _gOpenSubFrameNum2 = MSG22XX_NUM_OPEN_2_SENSOR_YEJI;
-            _gOpenSubFrameNum3 = MSG22XX_NUM_OPEN_3_SENSOR_YEJI;
-            _gShortSubFrameNum1 = MSG22XX_NUM_SHORT_1_SENSOR_YEJI;
-            _gShortSubFrameNum2 = MSG22XX_NUM_SHORT_2_SENSOR_YEJI;
-            _gShortSubFrameNum3 = MSG22XX_NUM_SHORT_3_SENSOR_YEJI;
+        _gShort_1_GPO = short_1_X_GPO;
+        _gShort_2_GPO = short_2_X_GPO;
+        _gShort_3_GPO = short_3_X_GPO;
 
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-            _gShort_RIU4 = MSG22XX_short_4_YEJI;
-            _gShortSubFrameNum4 = MSG22XX_NUM_SHORT_4_SENSOR_YEJI;
+        _gShort_4 = short_4_X;
+        _gShort_4_GPO = short_4_X_GPO;
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        _gOpenRIU1 = open_1_X;
+        _gOpenRIU2 = open_2_X;
+        _gOpenRIU3 = open_3_X;
 
-            _gMAP1 = MSG22XX_MAP1_YEJI;
-            _gMAP2 = MSG22XX_MAP2_YEJI;
-            _gMAP3 = MSG22XX_MAP3_YEJI;
-            _gMAP40_1 = MSG22XX_MAP40_1_YEJI;
-            _gMAP40_2 = MSG22XX_MAP40_2_YEJI;
-            _gMAP41_1 = MSG22XX_MAP41_1_YEJI;
-            _gMAP41_2 = MSG22XX_MAP41_2_YEJI;
+        _gShort_RIU1 = short_1_X;
+        _gShort_RIU2 = short_2_X;
+        _gShort_RIU3 = short_3_X;
 
-            _gSHORT_MAP1 = MSG22XX_SHORT_MAP1_YEJI;
-            _gSHORT_MAP2 = MSG22XX_SHORT_MAP2_YEJI;
-            _gSHORT_MAP3 = MSG22XX_SHORT_MAP3_YEJI;
+        _gOpenSubFrameNum1 = NUM_OPEN_1_SENSOR_X;
+        _gOpenSubFrameNum2 = NUM_OPEN_2_SENSOR_X;
+        _gOpenSubFrameNum3 = NUM_OPEN_3_SENSOR_X;
+        _gShortSubFrameNum1 = NUM_SHORT_1_SENSOR_X;
+        _gShortSubFrameNum2 = NUM_SHORT_2_SENSOR_X;
+        _gShortSubFrameNum3 = NUM_SHORT_3_SENSOR_X;
+
+#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+        _gShort_RIU4 = short_4_X;
+        _gShortSubFrameNum4 = NUM_SHORT_4_SENSOR_X;
+#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+#endif
+
+        _gMAP1 = MAP1_X;
+        _gMAP2 = MAP2_X;
+        _gMAP3 = MAP3_X;
+        _gMAP40_1 = MAP40_1_X;
+        _gMAP40_2 = MAP40_2_X;
+        _gMAP41_1 = MAP41_1_X;
+        _gMAP41_2 = MAP41_2_X;
+
+        _gSHORT_MAP1 = SHORT_MAP1_X;
+        _gSHORT_MAP2 = SHORT_MAP2_X;
+        _gSHORT_MAP3 = SHORT_MAP3_X;
 
 #ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE       
-            _gMAP40_3 = MSG22XX_MAP40_3_YEJI;
-            _gMAP40_4 = MSG22XX_MAP40_4_YEJI;
-            _gMAP41_3 = MSG22XX_MAP41_3_YEJI;
-            _gMAP41_4 = MSG22XX_MAP41_4_YEJI;
+        _gMAP40_3 = MAP40_3_X;
+        _gMAP40_4 = MAP40_4_X;
+        _gMAP41_3 = MAP41_3_X;
+        _gMAP41_4 = MAP41_4_X;
 
-            _gSHORT_MAP4 = MSG22XX_SHORT_MAP4_YEJI;
+        _gSHORT_MAP4 = SHORT_MAP4_X;
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
  
-            _gItoTestKeyNum = MSG22XX_NUM_KEY_YEJI;
-            _gItoTestDummyNum = MSG22XX_NUM_DUMMY_YEJI;
-            _gItoTestTriangleNum = MSG22XX_NUM_SENSOR_YEJI;
-            _gIsEnable2R = MSG22XX_ENABLE_2R_YEJI;
-        }
+        _gItoTestKeyNum = NUM_KEY_X;
+        _gItoTestDummyNum = NUM_DUMMY_X;
+        _gItoTestTriangleNum = NUM_SENSOR_X;
+        _gIsEnable2R = ENABLE_2R_X;
     }
+/*	
     else if (TP_OF_Y == nTpType) // Modify. 
     {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)   
-        {
-            /*_gOpen1 = MSG21XXA_open_1_Y;
-            _gOpen1B = MSG21XXA_open_1B_Y;
-            _gOpen2 = MSG21XXA_open_2_Y;
-            _gOpen2B = MSG21XXA_open_2B_Y;
-            _gOpen3 = MSG21XXA_open_3_Y;
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        _gOpen1 = open_1_Y;
+        _gOpen1B = open_1B_Y;
+        _gOpen2 = open_2_Y;
+        _gOpen2B = open_2B_Y;
+        _gOpen3 = open_3_Y;
 
-            _gShort_1 = MSG21XXA_short_1_Y;
-            _gShort_2 = MSG21XXA_short_2_Y;
-            _gShort_3 = MSG21XXA_short_3_Y;
+        _gShort_1 = short_1_Y;
+        _gShort_2 = short_2_Y;
+        _gShort_3 = short_3_Y;
+        _gShort_4 = short_4_Y;
 
-            _gShort_1_GPO = MSG21XXA_short_1_Y_GPO;
-            _gShort_2_GPO = MSG21XXA_short_2_Y_GPO;
-            _gShort_3_GPO = MSG21XXA_short_3_Y_GPO;
-
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE       
-            _gShort_4 = MSG21XXA_short_4_Y;
-            _gShort_4_GPO = MSG21XXA_short_4_Y_GPO;
+        _gShort_1_GPO = short_1_Y_GPO;
+        _gShort_2_GPO = short_2_Y_GPO;
+        _gShort_3_GPO = short_3_Y_GPO;
+        _gShort_4_GPO = short_4_Y_GPO;
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        _gOpenRIU1 = open_1_Y;
+        _gOpenRIU2 = open_2_Y;
+        _gOpenRIU3 = open_3_Y;
 
-             _gMAP1 = MSG21XXA_MAP1_Y;
-             _gMAP2 = MSG21XXA_MAP2_Y;
-             _gMAP3 = MSG21XXA_MAP3_Y;
-             _gMAP40_1 = MSG21XXA_MAP40_1_Y;
-             _gMAP40_2 = MSG21XXA_MAP40_2_Y;
-             _gMAP41_1 = MSG21XXA_MAP41_1_Y;
-             _gMAP41_2 = MSG21XXA_MAP41_2_Y;
+        _gShort_RIU1 = short_1_Y;
+        _gShort_RIU2 = short_2_Y;
+        _gShort_RIU3 = short_3_Y;
 
-             _gSHORT_MAP1 = MSG21XXA_SHORT_MAP1_Y;
-             _gSHORT_MAP2 = MSG21XXA_SHORT_MAP2_Y;
-             _gSHORT_MAP3 = MSG21XXA_SHORT_MAP3_Y;
+        _gOpenSubFrameNum1 = NUM_OPEN_1_SENSOR_Y;
+        _gOpenSubFrameNum2 = NUM_OPEN_2_SENSOR_Y;
+        _gOpenSubFrameNum3 = NUM_OPEN_3_SENSOR_Y;
+        _gShortSubFrameNum1 = NUM_SHORT_1_SENSOR_Y;
+        _gShortSubFrameNum2 = NUM_SHORT_2_SENSOR_Y;
+        _gShortSubFrameNum3 = NUM_SHORT_3_SENSOR_Y;
+        _gShortSubFrameNum4 = NUM_SHORT_4_SENSOR_Y;
+#endif
 
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE       
-             _gMAP40_3 = MSG21XXA_MAP40_3_Y;
-             _gMAP40_4 = MSG21XXA_MAP40_4_Y;
-             _gMAP41_3 = MSG21XXA_MAP41_3_Y;
-             _gMAP41_4 = MSG21XXA_MAP41_4_Y;
+        _gMAP1 = MAP1_Y;
+        _gMAP2 = MAP2_Y;
+        _gMAP3 = MAP3_Y;
+        _gMAP40_1 = MAP40_1_Y;
+        _gMAP40_2 = MAP40_2_Y;
+        _gMAP40_3 = MAP40_3_Y;
+        _gMAP40_4 = MAP40_4_Y;
+        _gMAP41_1 = MAP41_1_Y;
+        _gMAP41_2 = MAP41_2_Y;
+        _gMAP41_3 = MAP41_3_Y;
+        _gMAP41_4 = MAP41_4_Y;
+
+        _gSHORT_MAP1 = SHORT_MAP1_Y;
+        _gSHORT_MAP2 = SHORT_MAP2_Y;
+        _gSHORT_MAP3 = SHORT_MAP3_Y;
+        _gSHORT_MAP4 = SHORT_MAP4_Y;
         
-             _gSHORT_MAP4 = MSG21XXA_SHORT_MAP4_Y;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
-             _gItoTestKeyNum = MSG21XXA_NUM_KEY_Y;
-             _gItoTestDummyNum = MSG21XXA_NUM_DUMMY_Y;
-             _gItoTestTriangleNum = MSG21XXA_NUM_SENSOR_Y;
-             _gIsEnable2R = MSG21XXA_ENABLE_2R_Y;*/
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)   
-        {
-             /*_gOpenRIU1 = MSG22XX_open_1_Y;
-             _gOpenRIU2 = MSG22XX_open_2_Y;
-             _gOpenRIU3 = MSG22XX_open_3_Y;
-
-             _gShort_RIU1 = MSG22XX_short_1_Y;
-             _gShort_RIU2 = MSG22XX_short_2_Y;
-             _gShort_RIU3 = MSG22XX_short_3_Y;
-
-             _gOpenSubFrameNum1 = MSG22XX_NUM_OPEN_1_SENSOR_Y;
-             _gOpenSubFrameNum2 = MSG22XX_NUM_OPEN_2_SENSOR_Y;
-             _gOpenSubFrameNum3 = MSG22XX_NUM_OPEN_3_SENSOR_Y;
-             _gShortSubFrameNum1 = MSG22XX_NUM_SHORT_1_SENSOR_Y;
-             _gShortSubFrameNum2 = MSG22XX_NUM_SHORT_2_SENSOR_Y;
-             _gShortSubFrameNum3 = MSG22XX_NUM_SHORT_3_SENSOR_Y;
-
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE       
-             _gShort_RIU4 = MSG22XX_short_4_Y;
-             _gShortSubFrameNum4 = MSG22XX_NUM_SHORT_4_SENSOR_Y;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
-             _gMAP1 = MSG22XX_MAP1_Y;
-             _gMAP2 = MSG22XX_MAP2_Y;
-             _gMAP3 = MSG22XX_MAP3_Y;
-             _gMAP40_1 = MSG22XX_MAP40_1_Y;
-             _gMAP40_2 = MSG22XX_MAP40_2_Y;
-             _gMAP41_1 = MSG22XX_MAP41_1_Y;
-             _gMAP41_2 = MSG22XX_MAP41_2_Y;
-
-             _gSHORT_MAP1 = MSG22XX_SHORT_MAP1_Y;
-             _gSHORT_MAP2 = MSG22XX_SHORT_MAP2_Y;
-             _gSHORT_MAP3 = MSG22XX_SHORT_MAP3_Y;
-
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE       
-             _gMAP40_3 = MSG22XX_MAP40_3_Y;
-             _gMAP40_4 = MSG22XX_MAP40_4_Y;
-             _gMAP41_3 = MSG22XX_MAP41_3_Y;
-             _gMAP41_4 = MSG22XX_MAP41_4_Y;
-        
-             _gSHORT_MAP4 = MSG22XX_SHORT_MAP4_Y;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
-             _gItoTestKeyNum = MSG22XX_NUM_KEY_Y;
-             _gItoTestDummyNum = MSG22XX_NUM_DUMMY_Y;
-             _gItoTestTriangleNum = MSG22XX_NUM_SENSOR_Y;
-             _gIsEnable2R = MSG22XX_ENABLE_2R_Y;*/
-        }
+        _gItoTestKeyNum = NUM_KEY_Y;
+        _gItoTestDummyNum = NUM_DUMMY_Y;
+        _gItoTestTriangleNum = NUM_SENSOR_Y;
+        _gIsEnable2R = ENABLE_2R_Y;
     }
+   */ 
     else
     {
         nTpType = 0;
@@ -621,18 +546,16 @@ static void _DrvMpTestItoTestAnaSwReset(void)
     DBG("*** %s() ***\n", __func__);
 
     RegSet16BitValue(0x1100, 0xFFFF); // reset ANA - analog
-
-    if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        RegSet16BitValueOn(0x130C, BIT1); // reset Filter - digital 
-    }
-    
+#if defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    RegSet16BitValueOn(0x130C, BIT1); // reset Filter - digital 
+#endif //CONFIG_ENABLE_CHIP_MSG21XX
     RegSet16BitValue(0x1100, 0x0000);
     mdelay(15);
 }
 
 //------------------------------------------------------------------------------//
 
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
 
 static u16 _DrvMpTestItoTestGetNum(void)
 {
@@ -771,7 +694,7 @@ static u16 _DrvMpTestItoTestMsg21xxaGetDataOut(s16 *pRawData)
     
     for (i = 0; i < nSensorNum * 2; i ++)
     {
-        DBG("szDbBusRxData[%d] = %d\n", i, szDbBusRxData[i]); // add for debug
+        DBG("szDbBusRxData[%d] = %d\n", i, szDbBusRxData[i]);
     }
  
     nRegInt = RegGet16BitValue((0x3d<<8) | (REG_INTR_FIQ_MASK<<1)); 
@@ -874,38 +797,35 @@ static void _DrvMpTestItoTestMsg21xxaSendDataIn(u8 nStep)
     szDbBusTxData[4] = (pType[128+0x15] >> 8) & 0xFF;
     IicWriteData(SLAVE_I2C_ID_DBBUS, &szDbBusTxData[0], 5);
 
-    if (_gItoTestMode == ITO_TEST_MODE_OPEN_TEST)
-    {    	
 //#if 1 //for AC mod
-        szDbBusTxData[1] = 0x13;
-        szDbBusTxData[2] = 0x12 * 2;
-        szDbBusTxData[3] = 0x30;
-        szDbBusTxData[4] = 0x30;
-        IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);        
+    szDbBusTxData[1] = 0x13;
+    szDbBusTxData[2] = 0x12 * 2;
+    szDbBusTxData[3] = 0x30;
+    szDbBusTxData[4] = 0x30;
+    IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);        
         
-        szDbBusTxData[2] = 0x14 * 2;
-        szDbBusTxData[3] = 0X30;
-        szDbBusTxData[4] = 0X30;
-        IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);     
+    szDbBusTxData[2] = 0x14 * 2;
+    szDbBusTxData[3] = 0X30;
+    szDbBusTxData[4] = 0X30;
+    IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);     
         
-        szDbBusTxData[1] = 0x12;
-        for (i = 0x0D; i <= 0x10; i ++) //for AC noise(++)
-        {
-            szDbBusTxData[2] = i * 2;
-            szDbBusTxData[3] = pType[128+i] & 0xFF;
-            szDbBusTxData[4] = (pType[128+i] >> 8) & 0xFF;
-            IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);  
-        }
-
-        for (i = 0x16; i <= 0x18; i ++) //for AC noise
-        {
-	          szDbBusTxData[2] = i * 2;
-	          szDbBusTxData[3] = pType[128+i] & 0xFF;
-	          szDbBusTxData[4] = (pType[128+i] >> 8) & 0xFF;
-	          IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);  
-        }
-//#endif
+    szDbBusTxData[1] = 0x12;
+    for (i = 0x0D; i <= 0x10; i ++) //for AC noise(++)
+    {
+	      szDbBusTxData[2] = i * 2;
+	      szDbBusTxData[3] = pType[128+i] & 0xFF;
+	      szDbBusTxData[4] = (pType[128+i] >> 8) & 0xFF;
+	      IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);  
     }
+
+    for (i = 0x16; i <= 0x18; i ++) //for AC noise
+    {
+	      szDbBusTxData[2] = i * 2;
+	      szDbBusTxData[3] = pType[128+i] & 0xFF;
+	      szDbBusTxData[4] = (pType[128+i] >> 8) & 0xFF;
+	      IicWriteData(SLAVE_I2C_ID_DBBUS, szDbBusTxData, 5);  
+    }
+//#endif
 }
 
 static void _DrvMpTestItoOpenTestMsg21xxaSetC(u8 nCSubStep)
@@ -953,6 +873,9 @@ static void _DrvMpTestItoOpenTestMsg21xxaFirst(u8 nItemId, s16 *pRawData, s8 *pD
     u8  nSensorNum1 = 0, nSensorNum2 = 0, nTotalSensor = 0;
     u8 	*pMapping = NULL;
     
+//    nSensorNum1 = 0;
+//    nSensorNum2 = 0;	
+
     DBG("*** %s() nItemId = %d ***\n", __func__, nItemId);
 	
     // Stop cpu
@@ -1244,13 +1167,14 @@ static void _DrvMpTestItoShortTestMsg21xxaFirst(u8 nItemId, s16 *pRawData, s8 *p
     }	
 }
 
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
 
 static u16 _DrvMpTestItoTestMsg22xxGetDataOut(s16 *pRawData, u16 nSubFrameNum)
 {
     u32 i;
     u16 szRawData[MAX_CHANNEL_NUM*2] = {0};
     u16 nRegInt = 0x0000;
-    u16 nSize = nSubFrameNum * 4;  // 1SF 4AFE
+    u16 nSize = nSubFrameNum * 4;
     u8  szDbBusTxData[8] = {0};
     u8  szDbBusRxData[MAX_CHANNEL_NUM*4] = {0};
 
@@ -1258,13 +1182,12 @@ static u16 _DrvMpTestItoTestMsg22xxGetDataOut(s16 *pRawData, u16 nSubFrameNum)
 
     RegSet16BitValueOff(0x120A, BIT1); //one-shot mode
     RegSet16BitValueOff(0x3D08, BIT8); //FIQ_E_FRAME_READY_MASK
-    //RegSet16BitValue(0x130C, BIT15); //MCU read done
+    //RegSet16BitValueOn(0x130C, BIT15); //MCU read done
     RegSet16BitValueOn(0x120A, BIT0); //trigger one-shot 
 
     DBG("polling start\n");
 
-    //Polling frame-ready interrupt status
-    do 
+    do
     {
         nRegInt = RegGet16BitValue(0x3D18); //bank:intr_ctrl, addr:h000c
     } while(( nRegInt & FIQ_E_FRAME_READY_MASK ) == 0x0000);
@@ -1275,27 +1198,31 @@ static u16 _DrvMpTestItoTestMsg22xxGetDataOut(s16 *pRawData, u16 nSubFrameNum)
 
     //ReadRegBurst start   
     szDbBusTxData[0] = 0x10;
-    szDbBusTxData[1] = 0x15; //bank:fout, addr:h0000 
+    szDbBusTxData[1] = 0x15; //bank:fir, addr:h0000 
     szDbBusTxData[2] = 0x00;
     IicWriteData(SLAVE_I2C_ID_DBBUS, &szDbBusTxData[0], 3);
     mdelay(20);
+//    IicReadData(SLAVE_I2C_ID_DBBUS, &szDbBusRxData[0], (MAX_CHANNEL_NUM * 4));
     IicReadData(SLAVE_I2C_ID_DBBUS, &szDbBusRxData[0], (nSubFrameNum * 4 * 2));
     mdelay(100);
 
+//    for (i = 0; i < (MAX_CHANNEL_NUM * 4); i ++)
     for (i = 0; i < (nSubFrameNum * 4 * 2); i ++)
     {
-        DBG("szDbBusRxData[%d] = %d\n", i, szDbBusRxData[i]); // add for debug
+        DBG("szDbBusRxData[%d] = %d\n", i, szDbBusRxData[i]);
     }
     //ReadRegBurst stop
  
     RegSet16BitValueOn(0x3D08, BIT8); //FIQ_E_FRAME_READY_MASK
 
+//    for (i = 0; i < (MAX_CHANNEL_NUM * 2); i ++)
     for (i = 0; i < nSize; i ++)
     {
         szRawData[i] = (szDbBusRxData[2 * i + 1] << 8 ) | (szDbBusRxData[2 * i]);
         pRawData[i] = (s16)szRawData[i];
     }
     
+//    return (MAX_CHANNEL_NUM * 2);
     return nSize;
 }
 
@@ -1593,6 +1520,7 @@ static void _DrvMpTestItoOpenTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pDa
         nSubFrameNum = 24;
     }
 
+
     _DrvMpTestItoTestMsg22xxSendDataIn(nItemId - 36, nSubFrameNum * 6);
     RegSet16BitValue(0x1216, (nSubFrameNum - 1) << 1); // subframe numbers, 0:1subframe, 1:2subframe  
 
@@ -1607,16 +1535,16 @@ static void _DrvMpTestItoOpenTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pDa
             RegSet16BitValue(0x1110, 0x0020); //3.0V -> 0.6V
         }
     
-        RegSet16BitValue(0x11C8, 0x000F); //csub sel overwrite enable, will referance value of 11C0
-        RegSet16BitValue(0x1174, 0x0F06); // 1 : sel idel driver for sensor pad that connected to AFE
-        RegSet16BitValue(0x1208, 0x0006); //PRS1
-        RegSet16BitValue(0x1240, 0xFFFF); //mutual cap mode selection for total 24 subframes, 0: normal sense, 1: mutual cap sense
-        RegSet16BitValue(0x1242, 0x00FF); //mutual cap mode selection for total 24 subframes, 0: normal sense, 1: mutual cap sense
+    RegSet16BitValue(0x11C8, 0x000F); //csub sel overwrite enable, will referance value of 11C0
+    RegSet16BitValue(0x1174, 0x0F06); // 1 : sel idel driver for sensor pad that connected to AFE
+    RegSet16BitValue(0x1208, 0x0006); //PRS1
+    RegSet16BitValue(0x1240, 0xFFFF); //mutual cap mode selection for total 24 subframes, 0: normal sense, 1: mutual cap sense
+    RegSet16BitValue(0x1242, 0x00FF); //mutual cap mode selection for total 24 subframes, 0: normal sense, 1: mutual cap sense
 
-        _DrvMpTestItoTestMsg22xxGetChargeDumpTime(1, &nChargeTime, &nDumpTime);
+    _DrvMpTestItoTestMsg22xxGetChargeDumpTime(1, &nChargeTime, &nDumpTime);
 
-        RegSet16BitValue(0x1226, nChargeTime);
-        RegSet16BitValue(0x122A, nDumpTime);
+    RegSet16BitValue(0x1226, nChargeTime);
+    RegSet16BitValue(0x122A, nDumpTime);
 
         _DrvMpTestItoTestMsg22xxSetC(CSUB_REF);
         _DrvMpTestItoTestAnaSwReset();
@@ -1626,23 +1554,14 @@ static void _DrvMpTestItoOpenTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pDa
 
     for (i = 0; i < nSubFrameNum; i ++)
     {
-        //printk("MIKE: szTmpRawData[%d * 4] >> 3 = %d\n", i, szTmpRawData[i * 4] >> 3); // add for debug
-        //printk("MIKE: pMapping[%d] = %d\n", i, pMapping[i]); // add for debug
+//        DBG("szTmpRawData[%d * 4] >> 3 = %d\n", i, szTmpRawData[i * 4] >> 3); // add for debug
+//        DBG("pMapping[%d] = %d\n", i, pMapping[i]); // add for debug
 
-		//open test rawdata backup add by mike.li[2015.06.30]
-		if (nItemId == 40) {
-			_gRawData1_open[pMapping[i]] = (szTmpRawData[i * 4] >> 3);  // Filter to ADC
-			_gDataFlag1_open[pMapping[i]] = 1;
-		} else {
-			_gRawData2_open[pMapping[i]] = (szTmpRawData[i * 4] >> 3);  // Filter to ADC
-			_gDataFlag2_open[pMapping[i]] = 1;
-		}
-		//end
-        pRawData[pMapping[i]] = (szTmpRawData[i * 4] >> 3);  // Filter to ADC
+        pRawData[pMapping[i]] = (szTmpRawData[i * 4] >> 3);  // Filter to ADC 
         pDataFlag[pMapping[i]] = 1;
     }
 }
-
+/*
 static void _DrvMpTestItoShortTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pDataFlag)		
 {
     u32 i, j;
@@ -1654,23 +1573,17 @@ static void _DrvMpTestItoShortTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pD
     
     DBG("*** %s() nItemId = %d ***\n", __func__, nItemId);
 
-    if ((nItemId == 0 && _gIsEnable2R == 1) || (nItemId == 1 && _gIsEnable2R == 0))
-    {
-        // Stop cpu
-        RegSet16BitValue(0x0FE6, 0x0001); //bank:mheg5, addr:h0073
-        
-        _DrvMpTestItoTestMsg22xxRegisterResetPatch();
-        _DrvMpTestItoTestMsg22xxRegisterReset();
-    }
+    // Stop cpu
+    RegSet16BitValue(0x0FE6, 0x0001); //bank:mheg5, addr:h0073
+
+    _DrvMpTestItoTestMsg22xxRegReset();
 
     switch(nItemId)
     {
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
         case 0: // 39-4 (2R)
             pMapping = &_gSHORT_MAP4[0];
             nSensorNum = _gShortSubFrameNum4;
             break;
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
         case 1: // 39-1
             pMapping = &_gSHORT_MAP1[0];
             nSensorNum = _gShortSubFrameNum1;
@@ -1695,65 +1608,30 @@ static void _DrvMpTestItoShortTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pD
     }
 
     _DrvMpTestItoTestMsg22xxSendDataIn(nItemId, nSubFrameNum * 6);
+
+
+    //RegSet16BitValue(0x1110, 0x0030); // [6:4}  011 : 2.1V -> 1.5V
+    RegSet16BitValue(0x1110, 0x0060); // 2.4V -> 1.2V
+    RegSet16BitValue(0x11C8, 0x000F); // csub sel overwrite enable, will referance value of 11C0
+    RegSet16BitValue(0x1174, 0x0006); // [11:8] 000 : sel active driver for sensor pad that connected to AFE
+    RegSet16BitValue(0x1208, 0x0006); // PRS1
+    RegSet16BitValueOn(0x1104, BIT14); // R mode 
     RegSet16BitValue(0x1216, (nSubFrameNum - 1) << 1); // subframe numbers, 0:1subframe, 1:2subframe
+    RegSet16BitValue(0x1176, 0x0000); // CFB 10p
+    RegSet16BitValue(0x1226, 0x000B); // Charge 4ns
+    RegSet16BitValue(0x122A, 0x000B); // Dump 4ns     
 
-    if ((nItemId == 0 && _gIsEnable2R == 1) || (nItemId == 1 && _gIsEnable2R == 0))
-    {
-        RegSet16BitValue(0x1110, 0x0030); // [6:4}  011 : 2.1V -> 1.5V
-//        RegSet16BitValue(0x1110, 0x0060); // 2.4V -> 1.2V
-        RegSet16BitValue(0x11C8, 0x000F); // csub sel overwrite enable, will referance value of 11C0
-        RegSet16BitValue(0x1174, 0x0000); // [11:8] 000 : sel active driver for sensor pad that connected to AFE
-        RegSet16BitValue(0x1208, 0x0006); // PRS 1
-        RegSet16BitValueOn(0x1104, BIT14); // R mode 
-        RegSet16BitValue(0x1176, 0x0000); // CFB 10p
-        
-        _DrvMpTestItoTestMsg22xxSetC(CSUB_REF);
 
-        RegMask16BitValue(0x1213, 0x007F, 0x003B, ADDRESS_MODE_16BIT); // Charge 20ns (group A)
-        RegMask16BitValue(0x1218, 0x007F, 0x003B, ADDRESS_MODE_16BIT); // Charge 20ns (group B)
-    }    
-
-    RegMask16BitValue(0x1215, 0x007F, 0x000B, ADDRESS_MODE_16BIT); // Dump 4ns (group A)
-    RegMask16BitValue(0x1219, 0x007F, 0x000B, ADDRESS_MODE_16BIT); // Dump 4ns (group B)
-
-    _DrvMpTestItoTestAnaSwReset();
-    _DrvMpTestItoTestMsg22xxGetDataOut(szIIRTmp, nSubFrameNum);
+    _DrvMpTestItoTestMsg22xxSetC(CSUB_REF);
+    _DrvMpTestItoTestSwReset();
+    _DrvMpTestItoTestMsg22xxGetDataOut(szTmpRawData, nSubFrameNum);
     
-    if (nSensorNum > MAX_SUBFRAME_NUM)
+    if (nSensorNum > 24)
     {
         j = 0;
 
-        for (i = 0; i < MAX_SUBFRAME_NUM; i ++)
-        {
-            szIIR1[j] = (szIIRTmp[i * 4] >> 3);
-            j ++;
-            
-            if ((nSensorNum - MAX_SUBFRAME_NUM) > i)
-            {
-                szIIR1[j] = (szIIRTmp[i * 4 + 1] >> 3);
-                j ++;
-            }    
-        }
-    }
-    else
-    {
+//        for (i = 0; i < MAX_SUBFRAME_NUM; i ++)
         for (i = 0; i < nSensorNum; i ++)
-        {
-            szIIR1[i] = (szIIRTmp[i * 4 + 1] >> 3);
-        }
-    }
-
-    RegMask16BitValue(0x1215, 0x007F, 0x0017, ADDRESS_MODE_16BIT); // Dump 8ns (group A)
-    RegMask16BitValue(0x1219, 0x007F, 0x0017, ADDRESS_MODE_16BIT); // Dump 8ns (group B)
-
-    _DrvMpTestItoTestAnaSwReset();
-    _DrvMpTestItoTestMsg22xxGetDataOut(szIIRTmp, nSubFrameNum);
-
-    if (nSensorNum > MAX_SUBFRAME_NUM)
-    {
-        j = 0;
-
-        for (i = 0; i < MAX_SUBFRAME_NUM; i ++)
         {
             szIIR2[j] = (szIIRTmp[i * 4] >> 3);
             j ++;
@@ -1773,7 +1651,6 @@ static void _DrvMpTestItoShortTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pD
         }
     }
 
-    //short test rawdata marking mike.li.
     for (i = 0; i < nSensorNum; i ++)
     {
         if ((abs(szIIR1[i]) > 4000) || (abs(szIIR2[i]) > 4000))
@@ -1786,12 +1663,12 @@ static void _DrvMpTestItoShortTestMsg22xxFirst(u8 nItemId, s16 *pRawData, s8 *pD
         }
         pDataFlag[pMapping[i]] = 1;
 
-        //printk("MIKE:szIIR1[%d] = %d, szIIR2[%d] = %d\n", i, szIIR1[i], i, szIIR2[i]); // add for debug
-        //printk("MIKE:pRawData[%d] = %d\n", pMapping[i], pRawData[pMapping[i]]); // add for debug
-        //printk("MIKE:pMapping[%d] = %d\n", i, pMapping[i]); // add for debug
+//        DBG("szIIR1[%d] = %d, szIIR2[%d] = %d\n", i, szIIR1[i], i, szIIR2[i]); // add for debug
+//        DBG("pRawData[%d] = %d\n", pMapping[i], pRawData[pMapping[i]]); // add for debug
+//        DBG("pMapping[%d] = %d\n", i, pMapping[i]); // add for debug
     }
 }
-
+*/
 static u8 _DrvMpTestMsg22xxCheckFirmwareVersion(void) // Only MSG22XX support platform firmware version
 {
     u32 i;
@@ -1822,12 +1699,16 @@ static u8 _DrvMpTestMsg22xxCheckFirmwareVersion(void) // Only MSG22XX support pl
     // RIU password
     RegSet16BitValue(0x161A, 0xABBA); 
 
+    // Clear pce
+    RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
 
     RegSet16BitValue(0x1600, 0xC1F2); // Set start address for platform firmware version on info block(Actually, start reading from 0xC1F0)
 
     // Enable burst mode
     RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
 
+    // Set pce
+    RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
     
     for (i = 0; i < 3; i ++)
     {
@@ -1849,18 +1730,14 @@ static u8 _DrvMpTestMsg22xxCheckFirmwareVersion(void) // Only MSG22XX support pl
         DBG("szDbBusRxData[%d] = 0x%x , %c \n", i*4+3, szDbBusRxData[i*4+3], szDbBusRxData[i*4+3]); // add for debug
     }
 
-    // Clear burst mode
     RegSet16BitValue(0x160C, RegGet16BitValue(0x160C) & (~0x01));      
-
+//        for (i = 0; i < (MAX_CHANNEL_NUM/2); i ++)
     RegSet16BitValue(0x1600, 0x0000); 
-
-    // Clear RIU password
     RegSet16BitValue(0x161A, 0x0000); 
-    
     for (i = 0; i < 10; i ++)
-    {
+        {
         nDiff = szDbBusRxData[2+i] - szCompareFwVersion[i];
-        
+//            DBG("pMapping[%d] = %d\n", i, pMapping[i]); // add for debug
         DBG("i = %d, nDiff = %d\n", i, nDiff);
         
         if (nDiff < 0)
@@ -1886,6 +1763,7 @@ static u8 _DrvMpTestMsg22xxCheckFirmwareVersion(void) // Only MSG22XX support pl
     return nIsOldFirmwareVersion;
 }
 
+#endif
 
 //------------------------------------------------------------------------------//
 
@@ -2147,45 +2025,59 @@ static ItoTestResult_e _DrvMpTestItoOpenTestSecond2r(u8 nItemId)
     return nRetVal;
 }
 #endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-
+/*
 static ItoTestResult_e _DrvMpTestItoShortTestSecond(u8 nItemId)
 {
     ItoTestResult_e nRetVal = ITO_TEST_OK;
     u32 i;
     u8 nSensorCount = 0;
-    u8 nNumOfSensorMapping1 = 0, nNumOfSensorMapping2 = 0;
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    u8 nNumOfSensorMapping1, nNumOfSensorMapping2;
+#endif //CONFIG_ENABLE_CHIP_MSG21XXA
 	
     DBG("*** %s() nItemId = %d ***\n", __func__, nItemId);
 
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    if ((_gItoTestTriangleNum + _gItoTestKeyNum + _gItoTestDummyNum) % 2 != 0)
     {
-        if ((_gItoTestTriangleNum + _gItoTestKeyNum + _gItoTestDummyNum) % 2 != 0)
-        {
-            nNumOfSensorMapping1 = (_gItoTestTriangleNum + _gItoTestKeyNum + _gItoTestDummyNum) / 2 + 1;
-            nNumOfSensorMapping2 = nNumOfSensorMapping1;
-        }
-        else
-        {
-            nNumOfSensorMapping1 = (_gItoTestTriangleNum + _gItoTestKeyNum + _gItoTestDummyNum) / 2;
-            nNumOfSensorMapping2 = nNumOfSensorMapping1;
-            if (nNumOfSensorMapping2 % 2 != 0)
-            {	
-                nNumOfSensorMapping2 ++;
-            }
-        }        
+        nNumOfSensorMapping1 = (_gItoTestTriangleNum + _gItoTestKeyNum + _gItoTestDummyNum) / 2 + 1;
+        nNumOfSensorMapping2 = nNumOfSensorMapping1;
     }
-
-    if (nItemId == 1) // 39-1
+    else
     {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)
-        {
-            nSensorCount = nNumOfSensorMapping1;
+        nNumOfSensorMapping1 = (_gItoTestTriangleNum + _gItoTestKeyNum + _gItoTestDummyNum) / 2;
+        nNumOfSensorMapping2 = nNumOfSensorMapping1;
+        if (nNumOfSensorMapping2 % 2 != 0)
+        {	
+            nNumOfSensorMapping2 ++;
         }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)
+    }        
+#endif //CONFIG_ENABLE_CHIP_MSG21XXA
+
+    if (nItemId == 0) // 39-4 (2R)   
+    {
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        nSensorCount = _gItoTestTriangleNum/2;
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        nSensorCount = _gShortSubFrameNum4;
+#endif        
+        for (i = 0; i < nSensorCount; i ++)
         {
-            nSensorCount = _gShortSubFrameNum1;
-        }        
-        
+            if (_gRawData4[_gSHORT_MAP4[i]] > SHORT_TEST_THRESHOLD)
+            {
+                _gTestFailChannel[_gTestFailChannelCount] = _gSHORT_MAP4[i];
+                _gTestFailChannelCount ++; 
+                nRetVal = ITO_TEST_FAIL;
+            }
+        }
+    }
+    else if (nItemId == 1) // 39-1
+    {
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        nSensorCount = nNumOfSensorMapping1;
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        nSensorCount = _gShortSubFrameNum1;
+#endif        
         for (i = 0; i < nSensorCount; i ++)
         {
             if (_gRawData1[_gSHORT_MAP1[i]] > SHORT_TEST_THRESHOLD)
@@ -2198,15 +2090,11 @@ static ItoTestResult_e _DrvMpTestItoShortTestSecond(u8 nItemId)
     }
     else if (nItemId == 2) // 39-2
     {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)
-        {
-            nSensorCount = nNumOfSensorMapping2;
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-            nSensorCount = _gShortSubFrameNum2;
-        }        
-        
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        nSensorCount = nNumOfSensorMapping2;
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        nSensorCount = _gShortSubFrameNum2;
+#endif        
         for (i = 0; i < nSensorCount; i ++)
         {
             if (_gRawData2[_gSHORT_MAP2[i]] > SHORT_TEST_THRESHOLD)
@@ -2219,15 +2107,11 @@ static ItoTestResult_e _DrvMpTestItoShortTestSecond(u8 nItemId)
     }
     else if (nItemId == 3) // 39-3
     {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)
-        {
-            nSensorCount = _gItoTestTriangleNum;
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-            nSensorCount = _gShortSubFrameNum3;
-        }      
-      
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        nSensorCount = _gItoTestTriangleNum;
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        nSensorCount = _gShortSubFrameNum3;
+#endif        
         for (i = 0; i < nSensorCount; i ++)
         {
             if (_gRawData3[_gSHORT_MAP3[i]] > SHORT_TEST_THRESHOLD)
@@ -2238,35 +2122,11 @@ static ItoTestResult_e _DrvMpTestItoShortTestSecond(u8 nItemId)
             }
         }
     }
-#ifdef CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
-    else if (nItemId == 0) // 39-4 (2R)   
-    {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)
-        {
-            nSensorCount = _gItoTestTriangleNum/2;
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-            nSensorCount = _gShortSubFrameNum4;
-        }        
-        
-        for (i = 0; i < nSensorCount; i ++)
-        {
-            if (_gRawData4[_gSHORT_MAP4[i]] > SHORT_TEST_THRESHOLD)
-            {
-                _gTestFailChannel[_gTestFailChannelCount] = _gSHORT_MAP4[i];
-                _gTestFailChannelCount ++; 
-                nRetVal = ITO_TEST_FAIL;
-            }
-        }
-    }
-#endif //CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
- 
     DBG("nSensorCount = %d\n", nSensorCount);
 
     return nRetVal;
 }
-
+*/
 s32 _DrvMpTestItoOpenTest(void)
 {
     ItoTestResult_e nRetVal1 = ITO_TEST_OK, nRetVal2 = ITO_TEST_OK, nRetVal3 = ITO_TEST_OK;
@@ -2276,7 +2136,7 @@ s32 _DrvMpTestItoOpenTest(void)
 
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
@@ -2317,22 +2177,15 @@ s32 _DrvMpTestItoOpenTest(void)
         _gDataFlag2[i] = 0;
         _gDataFlag3[i] = 0;
         _gTestFailChannel[i] = 0;
-        _gDataFlag1_open[i] = 0;
-        _gDataFlag2_open[i] = 0;
-		_gRawData1_open[i] = 0;
-		_gRawData2_open[i] = 0;
-    }
+    }	
 	
     _gTestFailChannelCount = 0; // Reset _gTestFailChannelCount to 0 before test start
 
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-        _DrvMpTestItoOpenTestMsg21xxaFirst(40, _gRawData1, _gDataFlag1);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        _DrvMpTestItoOpenTestMsg22xxFirst(40, _gRawData1, _gDataFlag1);
-    }
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    _DrvMpTestItoOpenTestMsg21xxaFirst(40, _gRawData1, _gDataFlag1);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    _DrvMpTestItoOpenTestMsg22xxFirst(40, _gRawData1, _gDataFlag1);
+#endif
 
     if (_gIsEnable2R)
     {
@@ -2345,14 +2198,11 @@ s32 _DrvMpTestItoOpenTest(void)
         nRetVal2 = _DrvMpTestItoOpenTestSecond(40);
     }
     
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-        _DrvMpTestItoOpenTestMsg21xxaFirst(41, _gRawData2, _gDataFlag2);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        _DrvMpTestItoOpenTestMsg22xxFirst(41, _gRawData2, _gDataFlag2);
-    }
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    _DrvMpTestItoOpenTestMsg21xxaFirst(41, _gRawData2, _gDataFlag2);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    _DrvMpTestItoOpenTestMsg22xxFirst(41, _gRawData2, _gDataFlag2);
+#endif
 
     if (_gIsEnable2R)
     {
@@ -2365,17 +2215,19 @@ s32 _DrvMpTestItoOpenTest(void)
         nRetVal3 = _DrvMpTestItoOpenTestSecond(41);
     }
 /*    
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-        _DrvMpTestItoOpenTestMsg21xxaFirst(42, _gRawData3, _gDataFlag3);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        _DrvMpTestItoOpenTestMsg22xxFirst(42, _gRawData3, _gDataFlag3);
-    }
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    _DrvMpTestItoOpenTestMsg21xxaFirst(42, _gRawData3, _gDataFlag3);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    _DrvMpTestItoOpenTestMsg22xxFirst(42, _gRawData3, _gDataFlag3);
+#endif
 */
     
     ITO_TEST_END:
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
     DrvPlatformLyrSetIicDataRate(g_I2cClient, 100000); //100 KHZ
     
@@ -2397,7 +2249,7 @@ s32 _DrvMpTestItoOpenTest(void)
         return ITO_TEST_OK;	
     }
 }
-
+/*
 static ItoTestResult_e _DrvMpTestItoShortTest(void)
 {
     ItoTestResult_e nRetVal1 = ITO_TEST_OK, nRetVal2 = ITO_TEST_OK, nRetVal3 = ITO_TEST_OK, nRetVal4 = ITO_TEST_OK, nRetVal5 = ITO_TEST_OK;
@@ -2407,7 +2259,7 @@ static ItoTestResult_e _DrvMpTestItoShortTest(void)
 
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
@@ -2449,59 +2301,51 @@ static ItoTestResult_e _DrvMpTestItoShortTest(void)
         _gDataFlag2[i] = 0;
         _gDataFlag3[i] = 0;
         _gDataFlag4[i] = 0;
-        _gTestFailChannel[i] = 0;
     }	
 	
     _gTestFailChannelCount = 0; // Reset _gTestFailChannelCount to 0 before test start
 	
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    _DrvMpTestItoShortTestMsg21xxaFirst(1, _gRawData1, _gDataFlag1);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    _DrvMpTestItoShortTestMsg22xxFirst(1, _gRawData1, _gDataFlag1);
+#endif
+
+    nRetVal2 = _DrvMpTestItoShortTestSecond(1);
+
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    _DrvMpTestItoShortTestMsg21xxaFirst(2, _gRawData2, _gDataFlag2);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    _DrvMpTestItoShortTestMsg22xxFirst(2, _gRawData2, _gDataFlag2);
+#endif
+
+    nRetVal3 = _DrvMpTestItoShortTestSecond(2);
+
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+    _DrvMpTestItoShortTestMsg21xxaFirst(3, _gRawData3, _gDataFlag3);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+    _DrvMpTestItoShortTestMsg22xxFirst(3, _gRawData3, _gDataFlag3);
+#endif
+
+    nRetVal4 = _DrvMpTestItoShortTestSecond(3);
+    
     if (_gIsEnable2R)
     {
-        if (g_ChipType == CHIP_TYPE_MSG21XXA)
-        {
-            _DrvMpTestItoShortTestMsg21xxaFirst(0, _gRawData4, _gDataFlag4);
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-            _DrvMpTestItoShortTestMsg22xxFirst(0, _gRawData4, _gDataFlag4);
-        }
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+        _DrvMpTestItoShortTestMsg21xxaFirst(0, _gRawData4, _gDataFlag4);
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        _DrvMpTestItoShortTestMsg22xxFirst(0, _gRawData4, _gDataFlag4);
+#endif
         
-        nRetVal2 = _DrvMpTestItoShortTestSecond(0);
+        nRetVal5 = _DrvMpTestItoShortTestSecond(0);
     }
 
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-        _DrvMpTestItoShortTestMsg21xxaFirst(1, _gRawData1, _gDataFlag1);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        _DrvMpTestItoShortTestMsg22xxFirst(1, _gRawData1, _gDataFlag1);
-    }
-
-    nRetVal3 = _DrvMpTestItoShortTestSecond(1);
-
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-        _DrvMpTestItoShortTestMsg21xxaFirst(2, _gRawData2, _gDataFlag2);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        _DrvMpTestItoShortTestMsg22xxFirst(2, _gRawData2, _gDataFlag2);
-    }
-
-    nRetVal4 = _DrvMpTestItoShortTestSecond(2);
-
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-        _DrvMpTestItoShortTestMsg21xxaFirst(3, _gRawData3, _gDataFlag3);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        _DrvMpTestItoShortTestMsg22xxFirst(3, _gRawData3, _gDataFlag3);
-    }
-
-    nRetVal5 = _DrvMpTestItoShortTestSecond(3);
-    
     ITO_TEST_END:
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
     DrvPlatformLyrSetIicDataRate(g_I2cClient, 100000); //100 KHZ
     
@@ -2516,13 +2360,70 @@ static ItoTestResult_e _DrvMpTestItoShortTest(void)
     }
     else if ((nRetVal1 == ITO_TEST_OK) && ((nRetVal2 != ITO_TEST_OK) || (nRetVal3 != ITO_TEST_OK) || (nRetVal4 != ITO_TEST_OK) || (nRetVal5 != ITO_TEST_OK)))
     {
-        return ITO_TEST_FAIL;
+        return ITO_TEST_FAIL;	
     }
     else
     {
         return ITO_TEST_OK;	
     }
 }
+
+
+static s32 DrvMpTestProcReadDebug(char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+    s32 nCount = 0;
+    
+    DBG("*** %s() ***\n", __func__);
+
+    _gItoTestResult = _DrvMpTestItoOpenTest();
+    
+    if (ITO_TEST_OK == _gItoTestResult)
+    {
+        DBG("ITO_TEST_OK");
+    }
+    else if (ITO_TEST_FAIL == _gItoTestResult)
+    {
+        DBG("ITO_TEST_FAIL");
+    }
+    else if (ITO_TEST_GET_TP_TYPE_ERROR == _gItoTestResult)
+    {
+        DBG("ITO_TEST_GET_TP_TYPE_ERROR");
+    }
+    
+    *eof = 1;
+    
+    return nCount;
+}
+
+static s32 DrvMpTestProcWriteDebug(struct file *file, const char *buffer, unsigned long count, void *data)
+{    
+    u32 i;
+    
+    DBG("*** %s() ***\n", __func__);
+
+    DBG("ito test result : %d", _gItoTestResult);
+
+    for (i = 0; i < MAX_CHANNEL_NUM; i ++)
+    {
+        DBG("_gRawData1[%d]=%d\n", i, _gRawData1[i]);
+    }
+    mdelay(5);
+
+    for (i = 0; i < MAX_CHANNEL_NUM; i ++)
+    {
+        DBG("_gRawData2[%d]=%d\n", i, _gRawData2[i]);
+    }
+    mdelay(5);
+
+    for (i = 0; i < MAX_CHANNEL_NUM; i ++)
+    {
+        DBG("_gRawData3[%d]=%d;\n",i , _gRawData3[i]);
+    }
+    mdelay(5);
+    
+    return count;
+}
+*/
 
 static void _DrvMpTestItoTestDoWork(struct work_struct *pWork)
 {
@@ -2536,7 +2437,7 @@ static void _DrvMpTestItoTestDoWork(struct work_struct *pWork)
     }
     else if (_gItoTestMode == ITO_TEST_MODE_SHORT_TEST)
     {
-        nRetVal = _DrvMpTestItoShortTest();
+   //     nRetVal = _DrvMpTestItoShortTest();
     }
     else
     {
@@ -2551,6 +2452,10 @@ static void _DrvMpTestItoTestDoWork(struct work_struct *pWork)
         _gCtpMpTestStatus = ITO_TEST_OK;
         _gIsInMpTest = 0;
         DBG("mp test success\n");
+
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+        DrvFwCtrlRestoreFirmwareModeToLogDataMode();    
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
     }
     else
     {
@@ -2577,6 +2482,10 @@ static void _DrvMpTestItoTestDoWork(struct work_struct *pWork)
               
             _gIsInMpTest = 0;
             DBG("mp test failed\n");
+
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+            DrvFwCtrlRestoreFirmwareModeToLogDataMode();    
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
         }
     }
 }
@@ -2585,13 +2494,29 @@ static void _DrvMpTestItoTestDoWork(struct work_struct *pWork)
 // GLOBAL FUNCTION DEFINITION
 /*=============================================================*/
 
+/*
+void DrvMpTestCreateProcEntry(void)
+{
+    _gMsgItoTest = proc_mkdir(PROC_MSG_ITO_TEST, NULL);
+    _gDebug = create_proc_entry(PROC_ITO_TEST_DEBUG, 0777, _gMsgItoTest);
+
+    if (NULL == _gDebug) 
+    {
+        DBG("create_proc_entry PROC_ITO_TEST_DEBUG FAIL\n");
+    } 
+    else 
+    {
+        _gDebug->read_proc = DrvMpTestProcReadDebug;
+        _gDebug->write_proc = DrvMpTestProcWriteDebug;
+        DBG("create_proc_entry PROC_ITO_TEST_DEBUG OK\n");
+    }
+}
+*/
+
 s32 DrvMpTestGetTestResult(void)
 {
     DBG("*** %s() ***\n", __func__);
     DBG("_gCtpMpTestStatus = %d\n", _gCtpMpTestStatus);
-	//add by mike.li for make sure _gCtpMpTestStatus already get true value.
-	while (_gCtpMpTestStatus == ITO_TEST_UNDER_TESTING)
-		msleep(100);
 
     return _gCtpMpTestStatus;
 }
@@ -2805,16 +2730,15 @@ void DrvMpTestScheduleMpTestWork(ItoTestMode_e eItoTestMode)
     {
         DBG("ctp mp test start\n");
         
-        if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-            _gIsOldFirmwareVersion = _DrvMpTestMsg22xxCheckFirmwareVersion();
-        }
+#if defined(CONFIG_ENABLE_CHIP_MSG22XX)
+        _gIsOldFirmwareVersion = _DrvMpTestMsg22xxCheckFirmwareVersion();
+#endif //CONFIG_ENABLE_CHIP_MSG22XX
 
         _gItoTestMode = eItoTestMode;
         _gIsInMpTest = 1;
         _gTestRetryCount = CTP_MP_TEST_RETRY_COUNT;
         _gCtpMpTestStatus = ITO_TEST_UNDER_TESTING;
-
+        
         queue_work(_gCtpMpTestWorkQueue, &_gCtpItoTestWork);
     }
 }
@@ -2827,136 +2751,5 @@ void DrvMpTestCreateMpTestWorkQueue(void)
     INIT_WORK(&_gCtpItoTestWork, _DrvMpTestItoTestDoWork);
 }
 
-//add by mike.li for show test log.[2015.07.02]
-char *DrvMpTestGetTestDataLog_Show(ItoTestMode_e eItoTestMode, char **pDataLog)
-{
-    u32 i;
-    //u8 nHighByte, nLowByte;
-
-    DBG("*** %s() ***\n", __func__);
-
-    if (eItoTestMode == ITO_TEST_MODE_OPEN_TEST)
-    {
-		*pDataLog += sprintf(*pDataLog, "--open test--\n");
-		*pDataLog += sprintf(*pDataLog, "--gRawData1--\n");
-        for (i = 0; i < MAX_CHANNEL_NUM; i ++)
-        {
-            if (_gDataFlag1_open[i] == 1)
-            {
-				// indicate it is a on-use channel number
-				*pDataLog += sprintf(*pDataLog, "CHNL%d:", i);
-				*pDataLog += sprintf(*pDataLog, " %2d\n", _gRawData1_open[i]);
-            }
-        }
-
-		*pDataLog += sprintf(*pDataLog, "\n--gRawData2--\n");
-        for (i = 0; i < MAX_CHANNEL_NUM; i ++)
-        {
-            if (_gDataFlag2_open[i] == 1)
-            {
-				// indicate it is a on-use channel number
-				*pDataLog += sprintf(*pDataLog, "CHNL%d:", i);
-				*pDataLog += sprintf(*pDataLog, " %2d\n", _gRawData2_open[i]);
-            }
-		}
-    }
-    else if (eItoTestMode == ITO_TEST_MODE_SHORT_TEST)
-    {
-		*pDataLog += sprintf(*pDataLog, "--short test--\n");
-		*pDataLog += sprintf(*pDataLog, "--gRawData1--\n");
-        for (i = 0; i < MAX_CHANNEL_NUM; i ++)
-        {
-            if (_gDataFlag1[i] == 1)
-            {
-				// indicate it is a on-use channel number
-				*pDataLog += sprintf(*pDataLog, "CHNL%d:", i);
-				*pDataLog += sprintf(*pDataLog, " %2d\n", _gRawData1[i]);
-            }
-        }
-
-		*pDataLog += sprintf(*pDataLog, "\n--gRawData2--\n");
-        for (i = 0; i < MAX_CHANNEL_NUM; i ++)
-        {
-            if (_gDataFlag2[i] == 1)
-            {
-				// indicate it is a on-use channel number
-				*pDataLog += sprintf(*pDataLog, "CHNL%d:", i);
-				*pDataLog += sprintf(*pDataLog, " %2d\n", _gRawData2[i]);
-            }
-        }
-
-		*pDataLog += sprintf(*pDataLog, "\n--gRawData3--\n");
-        for (i = 0; i < MAX_CHANNEL_NUM; i ++)
-        {
-            if (_gDataFlag3[i] == 1)
-            {
-				// indicate it is a on-use channel number
-				*pDataLog += sprintf(*pDataLog, "CHNL%d:", i);
-				*pDataLog += sprintf(*pDataLog, " %2d\n", _gRawData3[i]);
-            }
-        }
-
-        if (_gIsEnable2R)
-        {
-			*pDataLog += sprintf(*pDataLog, "\n--gRawData4--\n");
-            for (i = 0; i < MAX_CHANNEL_NUM; i ++)
-            {
-				if (_gDataFlag4[i] == 1)
-				{
-					// indicate it is a on-use channel number
-					*pDataLog += sprintf(*pDataLog, "CHNL%d:", i);
-					*pDataLog += sprintf(*pDataLog, " %2d\n", _gRawData4[i]);
-				}
-            }
-        }
-    }
-    else
-    {
-        DBG("*** Undefined MP Test Mode ***\n");
-    }
-
-	return *pDataLog;
-}
-
-void DrvOpenTestFailChannel_Save(void)
-{
-	u32 i;
-
-    DBG("*** %s() ***\n", __func__);
-    DBG("_gTestFailChannelCount = %d\n", _gTestFailChannelCount);
-
-	_gTestFailChannelCount_open = _gTestFailChannelCount;
-	for (i = 0; i < _gTestFailChannelCount; i ++)
-			_gTestFailChannel_open[i] = _gTestFailChannel[i];
-
-}
-
-char *DrvMpTestGetTestFailChannel_Show(ItoTestMode_e eItoTestMode, char **pFailChannel)
-{
-    u32 i;
-
-    DBG("*** %s() ***\n", __func__);
-    DBG("_gTestFailChannelCount = %d\n", _gTestFailChannelCount);
-
-	if (eItoTestMode == ITO_TEST_MODE_OPEN_TEST) {
-		*pFailChannel += sprintf(*pFailChannel, "Open test fail channel show\n");
-		for (i = 0; i < _gTestFailChannelCount_open && i < 3; i ++) {
-			*pFailChannel += sprintf(*pFailChannel, " %2d ", _gTestFailChannel_open[i]);
-		}
-    } else if (eItoTestMode == ITO_TEST_MODE_SHORT_TEST) {
-		*pFailChannel += sprintf(*pFailChannel, "Short test fail channel show\n");
-		for (i = 0; i < _gTestFailChannelCount && i < 3; i ++) {
-			*pFailChannel += sprintf(*pFailChannel, " %2d ", _gTestFailChannel[i]);
-		}
-    } else {
-        DBG("*** Undefined MP Test Mode ***\n");
-    }
-
-	*pFailChannel += sprintf(*pFailChannel, "\n");
-
-	return *pFailChannel;
-}
-//add by mike.li [2015.07.02]
-
 #endif //CONFIG_ENABLE_ITO_MP_TEST
-#endif //CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC
+#endif //CONFIG_ENABLE_CHIP_MSG21XXA || CONFIG_ENABLE_CHIP_MSG22XX

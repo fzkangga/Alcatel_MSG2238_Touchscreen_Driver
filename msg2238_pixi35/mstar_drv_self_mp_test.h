@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -32,8 +33,8 @@
 /*--------------------------------------------------------------------------*/
 
 #include "mstar_drv_common.h"
-
-#if defined(CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC)
+//merged by pangle at 20150228
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA) || defined(CONFIG_ENABLE_CHIP_MSG22XX)
 #ifdef CONFIG_ENABLE_ITO_MP_TEST
 
 /*--------------------------------------------------------------------------*/
@@ -53,23 +54,24 @@
 
 #define MAX_CHANNEL_NUM   (48)
 
-// define for MSG21XXA
-#define PIN_GUARD_RING    (46) 
-#define GPO_SETTING_SIZE  (3)  
-
-// define for MSG22XX
-#define RIU_BASE_ADDR       (0)   
-#define RIU_WRITE_LENGTH    (144)  
-#define CSUB_REF            (0) //(18)   
-#define CSUB_REF_MAX        (0x3F) 
-
-#define MAX_SUBFRAME_NUM    (24)
-#define MAX_AFE_NUM         (4)
-
+#if defined(CONFIG_ENABLE_CHIP_MSG21XXA)
+#define PIN_GUARD_RING    (46) // For MSG21XXA
+#define GPO_SETTING_SIZE  (3)  // For MSG21XXA
+#elif defined(CONFIG_ENABLE_CHIP_MSG22XX)
+#define RIU_BASE_ADDR       (0)    // For MSG22XX
+#define RIU_WRITE_LENGTH    (144)  // For MSG22XX
+#define CSUB_REF            (0) //(18)   // For MSG22XX
+#define CSUB_REF_MAX        (0x3F) // For MSG22XX
+#define MAX_SUBFRAME_NUM    (24)  //merged by pangle at 20150228
+#define MAX_AFE_NUM         (4)	  //merged by pangle at 20150228
+#endif
 
 #define REG_INTR_FIQ_MASK           (0x04)          
 #define FIQ_E_FRAME_READY_MASK      (1 << 8)
 
+
+//#define PROC_MSG_ITO_TEST     "msg-ito-test"
+//#define PROC_ITO_TEST_DEBUG   "debug"
 
 /*--------------------------------------------------------------------------*/
 /* PREPROCESSOR MACRO DEFINITION                                            */
@@ -96,6 +98,7 @@ extern s32 DrvMpTestGetTestResult(void);
 extern void DrvMpTestScheduleMpTestWork(ItoTestMode_e eItoTestMode);
 
 #endif //CONFIG_ENABLE_ITO_MP_TEST
-#endif //CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC
+//merged by pangle at 20150228
+#endif //CONFIG_ENABLE_CHIP_MSG21XXA || CONFIG_ENABLE_CHIP_MSG22XX
 
 #endif  /* __MSTAR_DRV_SELF_MP_TEST_H__ */

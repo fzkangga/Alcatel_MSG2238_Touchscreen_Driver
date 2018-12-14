@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -32,426 +33,158 @@
 #include "mstar_drv_main.h"
 #include "mstar_drv_ic_fw_porting_layer.h"
 #include "mstar_drv_platform_porting_layer.h"
-#include "mstar_drv_utility_adaption.h"
-
-#ifdef CONFIG_ENABLE_HOTKNOT
-#include "mstar_drv_hotknot.h"
-#endif //CONFIG_ENABLE_HOTKNOT
 
 /*=============================================================*/
 // EXTERN VARIABLE DECLARATION
 /*=============================================================*/
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-extern u32 g_GestureWakeupMode[2];
+extern u16 g_GestureWakeupMode;
 extern u8 g_GestureWakeupFlag;
-extern struct i2c_client *g_I2cClient;
-
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-extern u8 g_GestureDebugFlag;
-extern u8 g_GestureDebugMode;
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-extern u8 g_EnableTpProximity;
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
-#ifdef CONFIG_ENABLE_GLOVE_MODE
-extern u8 g_IsEnableGloveMode;
-#endif //CONFIG_ENABLE_GLOVE_MODE
-
-extern u8 g_IsUpdateFirmware;
-
+extern int _gIrq;
 /*=============================================================*/
 // GLOBAL VARIABLE DEFINITION
 /*=============================================================*/
-
-extern struct input_dev *g_InputDevice;
-
-#ifdef CONFIG_ENABLE_HOTKNOT
-extern u8 g_HotKnotState;
-extern u32 SLAVE_I2C_ID_DWI2C;
-#endif //CONFIG_ENABLE_HOTKNOT
-
-#ifdef CONFIG_ENABLE_CHARGER_DETECTION
-extern u8 g_ForceUpdate;
-#endif //CONFIG_ENABLE_CHARGER_DETECTION
-
-extern u8 IS_FIRMWARE_DATA_LOG_ENABLED;
-
-/*=============================================================*/
-// LOCAL VARIABLE DEFINITION
-/*=============================================================*/
-
-#ifdef CONFIG_ENABLE_HOTKNOT
-static u8 _gAMStartCmd[4] = {HOTKNOT_SEND, ADAPTIVEMOD_BEGIN, 0, 0};
-#endif //CONFIG_ENABLE_HOTKNOT
-//add by mike.li for suspend & resume.[2015.07.07]
-#if defined(CONFIG_FB)
-#include <linux/notifier.h>
-#include <linux/fb.h>
-struct notifier_block TPfb_notifier;
+int tp_suspend_flag = 0;
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
+extern int program_over;
 #endif
+extern struct input_dev *g_InputDevice;
 
 /*=============================================================*/
 // GLOBAL FUNCTION DEFINITION
 /*=============================================================*/
-
-//#ifdef CONFIG_ENABLE_NOTIFIER_FB
-#if 0
-int MsDrvInterfaceTouchDeviceFbNotifierCallback(struct notifier_block *pSelf, unsigned long nEvent, void *pData)
-{
-    struct fb_event *pEventData = pData;
-    int *pBlank;
-
-    if (pEventData && pEventData->data && nEvent == FB_EVENT_BLANK)
-    {
-        pBlank = pEventData->data;
-
-        if (*pBlank == FB_BLANK_UNBLANK)
-        {
-            DBG("*** %s() TP Resume ***\n", __func__);
-
-            if (g_IsUpdateFirmware != 0) // Check whether update frimware is finished
-            {
-                DBG("Not allow to power on/off touch ic while update firmware.\n");
-                return 0;
-            }
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-            if (g_EnableTpProximity == 1)
-            {
-                DBG("g_EnableTpProximity = %d\n", g_EnableTpProximity);
-                return 0;
-            }
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-            
-#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-#ifdef CONFIG_ENABLE_HOTKNOT
-            if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT
-            {
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-                if (g_GestureDebugMode == 1)
-                {
-                    DrvIcFwLyrCloseGestureDebugMode();
-                }
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
-                if (g_GestureWakeupFlag == 1)
-                {
-                    DrvIcFwLyrCloseGestureWakeup();
-                }
-                else
-                {
-                    DrvPlatformLyrEnableFingerTouchReport(); 
-                }
-            }
-#ifdef CONFIG_ENABLE_HOTKNOT
-            else    // Enable touch in hotknot transfer mode
-            {
-                DrvPlatformLyrEnableFingerTouchReport();     
-            }
-#endif //CONFIG_ENABLE_HOTKNOT
-#endif //CONFIG_ENABLE_GESTURE_WAKEUP
-    
-#ifdef CONFIG_ENABLE_HOTKNOT
-            if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT        
-            {
-                DrvPlatformLyrTouchDevicePowerOn(); 
-            }   
-    
-#ifdef CONFIG_ENABLE_CHARGER_DETECTION 
-            {
-                u8 szChargerStatus[20] = {0};
-     
-                DrvCommonReadFile("/sys/class/power_supply/battery/status", szChargerStatus, 20);
-            
-                DBG("*** Battery Status : %s ***\n", szChargerStatus);
-            
-                g_ForceUpdate = 1; // Set flag to force update charger status
-                
-                if (strstr(szChargerStatus, "Charging") != NULL || strstr(szChargerStatus, "Full") != NULL || strstr(szChargerStatus, "Fully charged") != NULL)
-                {
-                    DrvFwCtrlChargerDetection(1); // charger plug-in
-                }
-                else // Not charging
-                {
-                    DrvFwCtrlChargerDetection(0); // charger plug-out
-                }
-
-                g_ForceUpdate = 0; // Clear flag after force update charger status
-            }           
-#endif //CONFIG_ENABLE_CHARGER_DETECTION
-
-#ifdef CONFIG_ENABLE_GLOVE_MODE
-            if (g_IsEnableGloveMode == 1)
-            {
-                DrvIcFwCtrlOpenGloveMode();
-            }
-#endif //CONFIG_ENABLE_GLOVE_MODE
-
-            if (IS_FIRMWARE_DATA_LOG_ENABLED)    
-            {
-                DrvIcFwLyrRestoreFirmwareModeToLogDataMode(); // Mark this function call for avoiding device driver may spend longer time to resume from suspend state.
-            } //IS_FIRMWARE_DATA_LOG_ENABLED
-
-#ifndef CONFIG_ENABLE_GESTURE_WAKEUP
-            DrvPlatformLyrEnableFingerTouchReport(); 
-#endif //CONFIG_ENABLE_GESTURE_WAKEUP
-        }
-        else if (*pBlank == FB_BLANK_POWERDOWN)
-        {
-            DBG("*** %s() TP Suspend ***\n", __func__);
-            
-            if (g_IsUpdateFirmware != 0) // Check whether update frimware is finished
-            {
-                DBG("Not allow to power on/off touch ic while update firmware.\n");
-                return 0;
-            }
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-            if (g_EnableTpProximity == 1)
-            {
-                DBG("g_EnableTpProximity = %d\n", g_EnableTpProximity);
-                return 0;
-            }
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
-#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-#ifdef CONFIG_ENABLE_HOTKNOT
-            if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT
-            {
-                if (g_GestureWakeupMode[0] != 0x00000000 || g_GestureWakeupMode[1] != 0x00000000)
-                {
-                    DrvIcFwLyrOpenGestureWakeup(&g_GestureWakeupMode[0]);
-                    return 0;
-                }
-            }
-#endif //CONFIG_ENABLE_GESTURE_WAKEUP
-
-#ifdef CONFIG_ENABLE_HOTKNOT
-            if (g_HotKnotState == HOTKNOT_BEFORE_TRANS_STATE || g_HotKnotState == HOTKNOT_TRANS_STATE || g_HotKnotState == HOTKNOT_AFTER_TRANS_STATE)
-            {
-                IicWriteData(SLAVE_I2C_ID_DWI2C, &_gAMStartCmd[0], 4); 
-            }
-#endif //CONFIG_ENABLE_HOTKNOT 
-
-
-            DrvPlatformLyrFingerTouchReleased(0, 0, 0); // Send touch end for clearing point touch
-            input_sync(g_InputDevice);
-
-            DrvPlatformLyrDisableFingerTouchReport();
-
-#ifdef CONFIG_ENABLE_HOTKNOT
-            if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT        
-            {
-                DrvPlatformLyrTouchDevicePowerOff(); 
-            }    
-        }
-    }
-
-    return 0;
-}
-
-#else
-extern u8 g_IsUpdateFirmware;
-void MsDrvInterfaceTouchDeviceSuspend(void)
+#if defined(CONFIG_HAS_EARLYSUSPEND)
+void MsDrvInterfaceTouchDeviceSuspend(struct early_suspend *pSuspend)
 {
     DBG("*** %s() ***\n", __func__);
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-    if (g_IsUpdateFirmware != 0) // Check whether update frimware is finished
-    {
-        DBG("Not allow to power on/off touch ic while update firmware.\n");
-        return;
-    }
-#endif
-
-	/* modify by furong, 2014/12/10, PR-865304, add for sometimes TP can't work after suspend/resume. */
-	#if 0
-	if (atomic_read(&tp_suspended)) {
-		DBG("****Already in suspend state*****\n");
-		return;
-	}
-	atomic_set(&tp_suspended, 1);
-	#endif
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-    if (g_EnableTpProximity == 1)
-    {
-        DBG("g_EnableTpProximity = %d\n", g_EnableTpProximity);
-        return;
-    }
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-#ifdef CONFIG_ENABLE_HOTKNOT
-    if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT
+//    g_GestureWakeupMode = 0x1FFF; // Enable all gesture wakeup mode for testing 
+
+    if (g_GestureWakeupMode != 0x0000)
     {
-        if (g_GestureWakeupMode[0] != 0x00000000 || g_GestureWakeupMode[1] != 0x00000000)
-        {
-            DrvIcFwLyrOpenGestureWakeup(&g_GestureWakeupMode[0]);
-            return;
-        }
+        DrvIcFwLyrOpenGestureWakeup(g_GestureWakeupMode);
+        return;
     }
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
-#ifdef CONFIG_ENABLE_HOTKNOT
-    if (g_HotKnotState == HOTKNOT_BEFORE_TRANS_STATE || g_HotKnotState == HOTKNOT_TRANS_STATE || g_HotKnotState == HOTKNOT_AFTER_TRANS_STATE)
-    {
-        IicWriteData(SLAVE_I2C_ID_DWI2C, &_gAMStartCmd[0], 4); 
-    }
-#endif //CONFIG_ENABLE_HOTKNOT  
-
-	DrvPlatformLyrDisableFingerTouchReport();
-    DrvPlatformLyrFingerTouchReleased(0, 0, 0); // Send touch end for clearing point touch
+    DrvPlatformLyrFingerTouchReleased(0, 0); // Send touch end for clearing point touch
     input_sync(g_InputDevice);
 
-    //DrvPlatformLyrDisableFingerTouchReport();
+    DrvPlatformLyrDisableFingerTouchReport();
+    DrvPlatformLyrTouchDevicePowerOff(); 
+}
 
-#ifdef CONFIG_ENABLE_HOTKNOT
-    if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT        
+void MsDrvInterfaceTouchDeviceResume(struct early_suspend *pSuspend)
+{
+    DBG("*** %s() ***\n", __func__);
+
+    if(program_over ==0)
+		return;
+#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
+    if (g_GestureWakeupFlag == 1)
     {
-        DrvPlatformLyrTouchDevicePowerOff(); 
-    DrvPlatformLyrTouchDeviceVoltageControl(false);//zxzadd
-    }    
+        DrvIcFwLyrCloseGestureWakeup();
+    }
+    else
+    {
+        DrvPlatformLyrEnableFingerTouchReport(); 
+    }
+#endif //CONFIG_ENABLE_GESTURE_WAKEUP
+    
+    DrvPlatformLyrTouchDevicePowerOn();
+/*
+    DrvPlatformLyrFingerTouchReleased(0, 0);
+    input_sync(g_InputDevice);
+*/    
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    DrvIcFwLyrRestoreFirmwareModeToLogDataMode();
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
+
+#ifndef CONFIG_ENABLE_GESTURE_WAKEUP
+    DrvPlatformLyrEnableFingerTouchReport(); 
+#endif //CONFIG_ENABLE_GESTURE_WAKEUP
+}
+#endif
+
+//added by litao for fb 2014-11-17 begin
+#if defined(CONFIG_FB)
+void MsDrvInterfaceTouchDeviceSuspend(void)
+{
+    u16 wkup_mode = 0;
+    DBG("*** %s() ***\n", __func__);
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
+    if(program_over ==0)
+		return;
+#endif
+    if(tp_suspend_flag){
+        DBG("*** Mstar is already suspended! ***\n");
+        return;
+    }
+    tp_suspend_flag = 1;
+#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
+//    g_GestureWakeupMode = 0x1FFF; // litao Enable all gesture wakeup mode for testing 20150120
+
+    if (g_GestureWakeupMode != 0x0000)
+    {
+	 wkup_mode = 0x1FFF;
+	 DrvPlatformLyrDisableFingerTouchReport();
+        DrvIcFwLyrOpenGestureWakeup(wkup_mode);
+        return;
+    }
+#endif //CONFIG_ENABLE_GESTURE_WAKEUP
+
+    DrvPlatformLyrFingerTouchReleased(0, 0); // Send touch end for clearing point touch
+    input_sync(g_InputDevice);
+
+    DrvPlatformLyrDisableFingerTouchReport();
+    DrvPlatformLyrTouchDevicePowerOff(); 
 }
 
 void MsDrvInterfaceTouchDeviceResume(void)
 {
-	//Add by Luoxingxing.
-	int i = 0;
-
     DBG("*** %s() ***\n", __func__);
-
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-    if (g_IsUpdateFirmware != 0) // Check whether update frimware is finished
-    {
-        DBG("Not allow to power on/off touch ic while update firmware.\n");
-        return;
-    }
-#endif
-/* modify by furong, 2014/12/10, PR-865304, add for sometimes TP can't work after suspend/resume.
-  because sometimes suspend twice but resume once, this leads to irq disabled twice but enabled only one time,
-  irq disabled times not equal to enabled times will cause TP irq not correctly enable and TP can't work. */
-	#if 0
-	if (!atomic_read(&tp_suspended)) {
-		DBG("****Already in awake state*****\n");
+    if(program_over ==0)
 		return;
-	}
-	atomic_set(&tp_suspended, 0);
-	#endif
-
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-    if (g_EnableTpProximity == 1)
-    {
-        DBG("g_EnableTpProximity = %d\n", g_EnableTpProximity);
+#endif
+    if(!tp_suspend_flag){
+        DBG("*** Mstar is already resumed! ***\n");
         return;
     }
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
+    tp_suspend_flag = 0;
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-#ifdef CONFIG_ENABLE_HOTKNOT
-    if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT
+    if (g_GestureWakeupFlag == 1)
     {
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-        if (g_GestureDebugMode == 1)
-        {
-            DrvIcFwLyrCloseGestureDebugMode();
-        }
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
-	if (g_GestureWakeupFlag != 0x0000)
-        {
-            DrvIcFwLyrCloseGestureWakeup();
-        }
-        else
-        {
-            DrvPlatformLyrEnableFingerTouchReport(); 
-        }
+        DrvIcFwLyrCloseGestureWakeup();
+//	 printk(KERN_ERR"Msg2238 enter DrvIcFwLyrCloseGestureWakeup\n");
     }
-#ifdef CONFIG_ENABLE_HOTKNOT
-    else    // Enable touch in hotknot transfer mode
+    else
     {
-        DrvPlatformLyrEnableFingerTouchReport();     
+        DrvPlatformLyrEnableFingerTouchReport(); 
     }
-#endif //CONFIG_ENABLE_HOTKNOT
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
     
-#ifdef CONFIG_ENABLE_HOTKNOT
-    if (g_HotKnotState != HOTKNOT_BEFORE_TRANS_STATE && g_HotKnotState != HOTKNOT_TRANS_STATE && g_HotKnotState != HOTKNOT_AFTER_TRANS_STATE)
-#endif //CONFIG_ENABLE_HOTKNOT        
-    {
-    DrvPlatformLyrTouchDeviceVoltageControl(true);//zxzadd
-        DrvPlatformLyrTouchDevicePowerOn(); 
-	mdelay(50);
-    }   
-    
-#ifdef CONFIG_ENABLE_CHARGER_DETECTION 
-    {
-        u8 szChargerStatus[20] = {0};
- 
-        DrvCommonReadFile("/sys/class/power_supply/battery/status", szChargerStatus, 20);
-        
-        DBG("*** Battery Status : %s ***\n", szChargerStatus);
-        
-        g_ForceUpdate = 1; // Set flag to force update charger status
-
-        if (strstr(szChargerStatus, "Charging") != NULL || strstr(szChargerStatus, "Full") != NULL || strstr(szChargerStatus, "Fully charged") != NULL)
-        {
-            DrvFwCtrlChargerDetection(1); // charger plug-in
-        }
-        else // Not charging
-        {
-            DrvFwCtrlChargerDetection(0); // charger plug-out
-        }
-
-        g_ForceUpdate = 0; // Clear flag after force update charger status
-    }           
-#endif //CONFIG_ENABLE_CHARGER_DETECTION
-
-#ifdef CONFIG_ENABLE_GLOVE_MODE
-    if (g_IsEnableGloveMode == 1)
-    {
-        DrvIcFwCtrlOpenGloveMode();
-    }
-#endif //CONFIG_ENABLE_GLOVE_MODE
-
-    if (IS_FIRMWARE_DATA_LOG_ENABLED)    
-    {
-        DrvIcFwLyrRestoreFirmwareModeToLogDataMode(); // Mark this function call for avoiding device driver may spend longer time to resume from suspend state.
-    } //IS_FIRMWARE_DATA_LOG_ENABLED
+    DrvPlatformLyrTouchDevicePowerOn();
+/*
+    DrvPlatformLyrFingerTouchReleased(0, 0);
+    input_sync(g_InputDevice);
+*/    
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    DrvIcFwLyrRestoreFirmwareModeToLogDataMode();
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
 #ifndef CONFIG_ENABLE_GESTURE_WAKEUP
     DrvPlatformLyrEnableFingerTouchReport(); 
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
-    DrvPlatformLyrEnableFingerTouchReport(); 
-
-	//Add by Luoxingxing to release all points when resume.START
-	for (i = 0; i < MAX_TOUCH_NUM; i ++)
-	{
-		 input_report_abs(g_InputDevice, ABS_MT_TRACKING_ID, -1);
-   		 input_mt_sync(g_InputDevice);
-	}
-	input_sync(g_InputDevice);
-	//END
 }
 
-#endif //CONFIG_ENABLE_NOTIFIER_FB
 
-#if 1
-//add by mike.li for suspend & resume.[2015.07.07]
-#if defined(CONFIG_FB)
-static int fb_notifier_callback(struct notifier_block *self,
+
+int fb_notifier_callback(struct notifier_block *self,
 				 unsigned long event, void *data)
 {
 	struct fb_event *evdata = data;
@@ -468,45 +201,26 @@ static int fb_notifier_callback(struct notifier_block *self,
 	return 0;
 }
 #endif
-#endif
-extern int msg2638_pinctrl_init(struct i2c_client *pClient);
+//added by litao for fb 2014-11-17 end
+
 /* probe function is used for matching and initializing input device */
 s32 /*__devinit*/ MsDrvInterfaceTouchDeviceProbe(struct i2c_client *pClient, const struct i2c_device_id *pDeviceId)
 {
     s32 nRetVal = 0;
 
     DBG("*** %s() ***\n", __func__);
-    DrvPlatformLyrTouchDeviceVoltageInit(pClient,true);//zxzadd
-    DrvPlatformLyrTouchDeviceVoltageControl(true);//zxzadd
 
-    nRetVal = msg2638_pinctrl_init(pClient);
-	if (nRetVal < 0) {
-		DBG("MIKE: msg2638_pinctrl_init err : %d\n", nRetVal);
-		return nRetVal;
-	}
-
-    nRetVal = DrvPlatformLyrTouchDeviceRequestGPIO();
-	if (nRetVal < 0) {
-		DBG("MIKE: DrvPlatformLyrTouchDeviceRequestGPIO err : %d\n", nRetVal);
-		return nRetVal;
-	}
-
+    DrvPlatformLyrInputDeviceInitialize(pClient);
+  
+    DrvPlatformLyrTouchDeviceRequestGPIO();
+	
+    DrvPlatformLyrTouchDeviceRegisterFingerTouchInterruptHandler();
+	
 #ifdef CONFIG_ENABLE_REGULATOR_POWER_ON
     DrvPlatformLyrTouchDeviceRegulatorPowerOn();
 #endif //CONFIG_ENABLE_REGULATOR_POWER_ON
 
     DrvPlatformLyrTouchDevicePowerOn();
-
-    nRetVal = DrvPlatformLyrInputDeviceInitialize(pClient);
-	if (nRetVal < 0) {
-		DBG("MIKE: DrvPlatformLyrInputDeviceInitialize err : %d\n", nRetVal);
-		return nRetVal;
-	}
-#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
-#ifdef CONFIG_ENABLE_DMA_IIC
-    DmaAlloc();
-#endif //CONFIG_ENABLE_DMA_IIC
-#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
     nRetVal = DrvMainTouchDeviceInitialize();
     if (nRetVal == -ENODEV)
@@ -514,31 +228,26 @@ s32 /*__devinit*/ MsDrvInterfaceTouchDeviceProbe(struct i2c_client *pClient, con
         DrvPlatformLyrTouchDeviceRemove(pClient);
         return nRetVal;
     }
-
-    DrvPlatformLyrTouchDeviceRegisterFingerTouchInterruptHandler();
-
-    //DrvPlatformLyrTouchDeviceRegisterEarlySuspend();
-
-//add by mike.li for suspend & resume.[2015.07.07]
-#if defined(CONFIG_FB)
-	TPfb_notifier.notifier_call = fb_notifier_callback;
-
-	nRetVal = fb_register_client(&TPfb_notifier);
-
-	if (nRetVal)
-		dev_err(&pClient->dev, "Unable to register fb_notifier: %d\n",
-			nRetVal);
+#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
+#ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
+    mstar_create_proc();
 #endif
-	//add by mike.li for gesture.
-	device_init_wakeup(&pClient->dev, 1);
+#endif
 
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-    DrvIcFwLyrCheckFirmwareUpdateBySwId();
-#endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
+#if defined(CONFIG_FB)
+    call_back_functions_init();
+#endif
+
+#ifndef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
+    DrvPlatformLyrEnableFingerTouchReport();
+#endif	
     DBG("*** MStar touch driver registered ***\n");
-
-	tp_dbg = 0;
+//modify by pangle at 20150228 begin
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
+	 program_over = 1;
+#endif
+//modify by pangle at 20150228 end
     return nRetVal;
 }
 

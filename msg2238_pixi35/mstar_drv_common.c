@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -28,7 +29,6 @@
 // INCLUDE FILE
 /*=============================================================*/
 
-int tp_dbg = 1;
 #include "mstar_drv_common.h"
 
 /*=============================================================*/
@@ -41,7 +41,7 @@ int tp_dbg = 1;
 
 
 /*=============================================================*/
-// LOCAL VARIABLE DEFINITION
+// VARIABLE DEFINITION
 /*=============================================================*/
 
 static u32 _gCrc32Table[256]; 
@@ -121,7 +121,6 @@ u32 DrvCommonConvertCharToHexDigit(char *pCh, u32 nLength)
     {
         char ch = *pCh++;
         u32 n = 0;
-        u8  nIsValidDigit = 0;
         
         if ((i == 0 && ch == '0') || (i == 1 && ch == 'x'))
         {
@@ -131,49 +130,23 @@ u32 DrvCommonConvertCharToHexDigit(char *pCh, u32 nLength)
         if ('0' <= ch && ch <= '9')
         {
             n = ch-'0';
-            nIsValidDigit = 1;
         }
         else if ('a' <= ch && ch <= 'f')
         {
             n = 10 + ch-'a';
-            nIsValidDigit = 1;
         }
         else if ('A' <= ch && ch <= 'F')
         {
             n = 10 + ch-'A';
-            nIsValidDigit = 1;
         }
         
-        if (1 == nIsValidDigit)
+        if (i < 6)
         {
             nRetVal = n + nRetVal*16;
         }
     }
     
     return nRetVal;
-}
-
-void DrvCommonReadFile(char *pFilePath, u8 *pBuf, u16 nLength)
-{
-    struct file *pFile = NULL;
-    mm_segment_t old_fs;
-    ssize_t nReadBytes = 0;    
-
-    old_fs = get_fs();
-    set_fs(get_ds());
-
-    pFile = filp_open(pFilePath, O_RDONLY, 0);
-    if (IS_ERR(pFile)) {
-        DBG("Open file failed: %s\n", pFilePath);
-        return;
-    }
-
-    pFile->f_op->llseek(pFile, 0, SEEK_SET);
-    nReadBytes = pFile->f_op->read(pFile, pBuf, nLength, &pFile->f_pos);
-    DBG("Read %d bytes!\n", (int)nReadBytes);
-
-    set_fs(old_fs);        
-    filp_close(pFile, NULL);    
 }
 
 //------------------------------------------------------------------------------//

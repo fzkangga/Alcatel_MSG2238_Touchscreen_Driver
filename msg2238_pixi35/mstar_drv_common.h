@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -41,36 +42,27 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/gpio.h>
-//#include <linux/earlysuspend.h>
+#if defined(CONFIG_HAS_EARLYSUSPEND)
+#include <linux/earlysuspend.h>
+#endif
 #include <linux/i2c.h>
 #include <linux/proc_fs.h>
-#include <linux/file.h>
-#include <linux/fs.h>
-#include <linux/string.h>
-#include <linux/miscdevice.h>
-#include <linux/time.h>
-#include <linux/input/mt.h>
-#include <asm/unistd.h>
-#include <asm/uaccess.h>
 #include <asm/irq.h>
 #include <asm/io.h>
-
+#include <linux/of_gpio.h>
+#include <linux/wakelock.h>
+#include "../../fs/proc/internal.h"
+#include <asm/uaccess.h>
+#include <linux/fs.h>
+#if defined(CONFIG_FB)
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
 /*--------------------------------------------------------------------------*/
 /* TOUCH DEVICE DRIVER RELEASE VERSION                                      */
 /*--------------------------------------------------------------------------*/
 
-extern unsigned global_irq_gpio;
-extern unsigned global_reset_gpio;
-extern struct regulator *TPvdd;
-extern struct regulator *TPvcc_i2c;
-
-
-#define MSG_FW_NAME_MAX_LEN	50
-#define MSG_VTG_MIN_UV		2600000
-#define MSG_VTG_MAX_UV		3300000
-#define MSG_I2C_VTG_MIN_UV	1800000
-#define MSG_I2C_VTG_MAX_UV	1800000
-#define DEVICE_DRIVER_RELEASE_VERSION   ("3.3.0.0")
+#define DEVICE_DRIVER_RELEASE_VERSION   ("2.2.0.0")
 
 
 /*--------------------------------------------------------------------------*/
@@ -90,20 +82,19 @@ extern struct regulator *TPvcc_i2c;
 
 /*
  * Note.
- * The below compile option is used to enable the specific device driver code handling for mutual-capacitive ic or self-capacitive ic.
- * For a mutual-capacitive ic project(MSG26xxM/MSG28xx), please define the compile option CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC.
- * For a self-capacitive ic project(MSG21xxA/MSG22xx), please define the compile option CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC.
+ * The below compile option is used to enable the specific device driver code handling for distinct touch ic.
+ * Please enable the compile option depends on the touch ic that customer project are using and disable the others.
  */
 //#define CONFIG_ENABLE_CHIP_MSG21XXA
-//#define CONFIG_ENABLE_TOUCH_DRIVER_FOR_MUTUAL_IC
-#define CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC
+#define CONFIG_ENABLE_CHIP_MSG22XX
+//#define CONFIG_ENABLE_CHIP_MSG26XXM
 
 /*
  * Note.
  * The below compile option is used to enable the specific device driver code handling to make sure main board can supply power to touch ic for some specific BB chip of MTK(EX. MT6582)/SPRD(EX. SC7715)/QCOM(EX. MSM8610).
  * By default, this compile option is disabled.
  */
-//#define CONFIG_ENABLE_REGULATOR_POWER_ON
+#define CONFIG_ENABLE_REGULATOR_POWER_ON
 
 /*
  * Note.
@@ -125,6 +116,13 @@ extern struct regulator *TPvcc_i2c;
  */
 //#define CONFIG_ENABLE_DMA_IIC
 
+/*
+ * Note.
+ * The below compile option is used to enable the output log mechanism while touch device driver is running.
+ * If this compile option is not defined, the function for output log will be disabled.
+ * By default, this compile option is enabled.
+ */
+#define CONFIG_ENABLE_TOUCH_DRIVER_DEBUG
 
 /*
  * Note.
@@ -144,55 +142,30 @@ extern struct regulator *TPvcc_i2c;
 
 /*
  * Note.
- * The below flag is used to enable debug mode data log for firmware.
- * Please make sure firmware support debug mode data log firstly, then you can enable this flag.
- * By default, this flag is enabled.
- */
-#define CONFIG_ENABLE_FIRMWARE_DATA_LOG (1)   // 1 : Enable, 0 : Disable
-
-/*
- * Note.
- * The below compile option is used to enable segment read debug mode finger touch data for MSG26XXM/MSG28XX only.
- * Since I2C transaction length limitation for some specific MTK BB chip(EX. MT6589/MT6572/...) or QCOM BB chip, the debug mode finger touch data of MSG26XXM/MSG28XX can not be retrieved by one time I2C read operation.  
- * So we need to retrieve the complete finger touch data by segment read.
+ * The below compile option is used to enable debug mode data log for firmware.
  * By default, this compile option is enabled.
  */
-#define CONFIG_ENABLE_SEGMENT_READ_FINGER_TOUCH_DATA
+//#define CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
 /*
  * Note.
  * The below compile option is used to enable gesture wakeup.
  * By default, this compile option is disabled.
  */
-//modify by Yang.XU for enable gesture wakeup macro. [2015.10.12][PR1063126]
 #define CONFIG_ENABLE_GESTURE_WAKEUP
+
+/*
+  function   :the switch for all gesture  eg:c,w,e,v,s,z,up,down,left,right
+  value       : define/open undefine/close
+  update     : 20150207
+  author      :shihuijun
+*/
+//#define GESTURE_ALL_SWITCH 
 
 // ------------------- #ifdef CONFIG_ENABLE_GESTURE_WAKEUP ------------------- //
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
 
-/*
- * Note.
- * The below compile option is used to enable device driver to support at most 64 types of gesture wakeup mode.
- * If the below compile option is not enabled, device driver can only support at most 16 types of gesture wakeup mode.
- * By the way, 64 types of gesture wakeup mode is ready for MSG22XX/MSG28XX only.
- * But, 64 types of gesture wakeup mode for MSG21XXA/MSG26XXM is not supported.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-
-/*
- * Note.
- * The below compile option is used to enable gesture debug mode.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
-/*
- * Note.
- * The below compile option is used to enable gesture information mode.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_GESTURE_INFORMATION_MODE
+#define CONFIG_ENABLE_GESTURE_INFORMATION_MODE
 
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 // ------------------- #endif CONFIG_ENABLE_GESTURE_WAKEUP ------------------- //
@@ -201,10 +174,10 @@ extern struct regulator *TPvcc_i2c;
 /*
  * Note.
  * The below compile option is used to enable phone level MP test handling.
- * By the way, phone level MP test is ready for MSG21XXA/MSG22XX/MSG26XXM.
- * But, phone level MP test for MSG28XX is not ready yet.
+ * By the way, phone level MP test is ready for MSG21XXA(support Open Test&Short Test)/MSG26XXM(support Open Test) only, but phone level MP test for MSG22XX is not ready yet.
  * By default, this compile option is disabled.
  */
+//merged by pangle at 20150228 begin
 #define CONFIG_ENABLE_ITO_MP_TEST
 
 // ------------------- #ifdef CONFIG_ENABLE_ITO_MP_TEST ------------------- //
@@ -220,107 +193,43 @@ extern struct regulator *TPvcc_i2c;
  */
 #define CONFIG_ENABLE_MP_TEST_ITEM_FOR_2R_TRIANGLE
 
+/*
+ * Note.
+ * The below compile option is used for ITO TEST via PROC.
+ */
+
+#define CONFIG_ITO_TEST_BY_PROC
+
 #endif //CONFIG_ENABLE_ITO_MP_TEST
 // ------------------- #endif CONFIG_ENABLE_ITO_MP_TEST ------------------- //
-
+//merged by pangle at 20150228 end
+/*
+ * Note.
+ * The below compile option is used to change the permission of the sysfs virtual file system for CTS test.
+ * If this compile option is enabled, the permission 0644 will be used. 
+ * If this compile option is disabled, the permission 0777 will be used. 
+ * By default, this compile option is disabled.
+ */
+//#define SYSFS_AUTHORITY_CHANGE_FOR_CTS_TEST
 
 /*
  * Note.
  * If this compile option is not defined, the SW ID mechanism for updating firmware will be disabled.
  * By default, this compile option is disabled.
  */
+ //open fw upgrade by pangle at 20150303
 #define CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-
-// ------------------- #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID ------------------- //
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
 /*
  * Note.
  * If this compile option is defined, the update firmware bin file shall be stored in a two dimensional array format.
  * Else, the update firmware bin file shall be stored in an one dimensional array format.
  * Be careful, MSG22XX only support storing update firmware bin file in an one dimensional array format, it does not support two dimensional array format.
- * By default, this compile option is enabled.
+ * By default, this compile option is disabled.
  */
 //#define CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY 
 
-#endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-// ------------------- #endif CONFIG_UPDATE_FIRMWARE_BY_SW_ID ------------------- //
-
-/*
- * Note.
- * The below compile option is used to enable hotknot and only supports MSG28XX.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_HOTKNOT
-
-
-/*
- * Note.
- * The below compile option is used to enable proximity detection.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_PROXIMITY_DETECTION
-
-/*
- * Note.
- * The below compile option is used to enable notifier feedback handling for QCOM platform.
- * By default, this compile option is disabled.
- */
-#define CONFIG_ENABLE_NOTIFIER_FB
-
-
-/*
- * Note.
- * The below compile option is used to enable report rate calculation.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_COUNT_REPORT_RATE
-
-
-/*
- * Note.
- * The below compile option is used to enable glove mode and only supports MSG28XX.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_GLOVE_MODE
-
-
-/*
- * Note.
- * The below compile option is used to enable jni interface.
- * By default, this compile option is enabled.
- */
-#define CONFIG_ENABLE_JNI_INTERFACE
-
-
-/*
- * Note.
- * The below compile option is used to enable charger detection for notifying the charger plug in/plug out status to touch firmware.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_CHARGER_DETECTION
-
-
-/*
- * Note.
- * The below compile option is used to enable the debug code for clarifying some issues. For example, to debug the delay time issue for IC hardware reset.
- * By the way, this feature is supported for MSG28XX only.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_CODE_FOR_DEBUG
-
-
-/*
- * Note.
- * The below compile option is used to enable/disable Type A/Type B multi-touch protocol for reporting touch point/key to Linux input sub-system.
- * If this compile option is defined, Type B protocol is enabled.
- * Else, Type A protocol is enabled.
- * By the way, Type B protocol is supported for MSG26XXM/MSG28XX only, but is not supported for MSG21XXA/MSG22XX yet.
- * By default, this compile option is disabled.
- */
-//#define CONFIG_ENABLE_TYPE_B_PROTOCOL
-
-
+#define CHANGE_REPORT_TYPE_TO_B  //modify by pangle for report typed B at 20150417
 /*--------------------------------------------------------------------------*/
 /* PREPROCESSOR CONSTANT DEFINITION                                         */
 /*--------------------------------------------------------------------------*/
@@ -331,15 +240,15 @@ extern struct regulator *TPvcc_i2c;
 #define s8   signed char
 #define s16  signed short
 #define s32  signed int
-#define s64  int64_t
-#define u64  uint64_t
 
+#define SLAVE_I2C_ID_DBBUS         (0xB2>>1) //0x59 // for MSG22XX
+//#define SLAVE_I2C_ID_DBBUS         (0xC4>>1) //0x62 // for MSG21XX/MSG21XXA/MSG26XXM
+#define SLAVE_I2C_ID_DWI2C         (0x4C>>1) //0x26 
 
 #define CHIP_TYPE_MSG21XX   (0x01) // EX. MSG2133
 #define CHIP_TYPE_MSG21XXA  (0x02) // EX. MSG2133A/MSG2138A(Besides, use version to distinguish MSG2133A/MSG2138A, you may refer to _DrvFwCtrlUpdateFirmwareCash()) 
 #define CHIP_TYPE_MSG26XXM  (0x03) // EX. MSG2633M
 #define CHIP_TYPE_MSG22XX   (0x7A) // EX. MSG2238/MSG2256
-#define CHIP_TYPE_MSG28XX   (0x85) // EX. MSG2856
 
 #define PACKET_TYPE_TOOTH_PATTERN   (0x20)
 #define PACKET_TYPE_GESTURE_WAKEUP  (0x50)
@@ -381,143 +290,46 @@ extern struct regulator *TPvcc_i2c;
 
 
 #define MAX_DEBUG_REGISTER_NUM     (10)
-#define MAX_DEBUG_COMMAND_ARGUMENT_NUM      (4)
-
-#define MAX_UPDATE_FIRMWARE_BUFFER_SIZE    (130) // 130KB. The size shall be large enough for stored any kind firmware size of MSG21XXA(33KB)/MSG22XX(48.5KB)/MSG26XXM(40KB)/MSG28XX(130KB).
-
-#define MAX_I2C_TRANSACTION_LENGTH_LIMIT      (250) // Please change the value depends on the I2C transaction limitation for the platform that you are using.
-#define MAX_TOUCH_IC_REGISTER_BANK_SIZE       (256) // It is a fixed value and shall not be modified.
 
 
-#define PROCFS_AUTHORITY (0666)
-
+#ifdef SYSFS_AUTHORITY_CHANGE_FOR_CTS_TEST
+#define SYSFS_AUTHORITY (0644)
+#else
+#define SYSFS_AUTHORITY (0777)
+#endif
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-#define GESTURE_WAKEUP_MODE_DOUBLE_CLICK_FLAG     0x00000001    //0000 0000 0000 0000   0000 0000 0000 0001
-#define GESTURE_WAKEUP_MODE_UP_DIRECT_FLAG        0x00000002    //0000 0000 0000 0000   0000 0000 0000 0010
-#define GESTURE_WAKEUP_MODE_DOWN_DIRECT_FLAG      0x00000004    //0000 0000 0000 0000   0000 0000 0000 0100
-#define GESTURE_WAKEUP_MODE_LEFT_DIRECT_FLAG      0x00000008    //0000 0000 0000 0000   0000 0000 0000 1000
-#define GESTURE_WAKEUP_MODE_RIGHT_DIRECT_FLAG     0x00000010    //0000 0000 0000 0000   0000 0000 0001 0000
-#define GESTURE_WAKEUP_MODE_m_CHARACTER_FLAG      0x00000020    //0000 0000 0000 0000   0000 0000 0010 0000
-#define GESTURE_WAKEUP_MODE_W_CHARACTER_FLAG      0x00000040    //0000 0000 0000 0000   0000 0000 0100 0000
-#define GESTURE_WAKEUP_MODE_C_CHARACTER_FLAG      0x00000080    //0000 0000 0000 0000   0000 0000 1000 0000
-#define GESTURE_WAKEUP_MODE_e_CHARACTER_FLAG      0x00000100    //0000 0000 0000 0000   0000 0001 0000 0000
-#define GESTURE_WAKEUP_MODE_V_CHARACTER_FLAG      0x00000200    //0000 0000 0000 0000   0000 0010 0000 0000
-#define GESTURE_WAKEUP_MODE_O_CHARACTER_FLAG      0x00000400    //0000 0000 0000 0000   0000 0100 0000 0000
-#define GESTURE_WAKEUP_MODE_S_CHARACTER_FLAG      0x00000800    //0000 0000 0000 0000   0000 1000 0000 0000
-#define GESTURE_WAKEUP_MODE_Z_CHARACTER_FLAG      0x00001000    //0000 0000 0000 0000   0001 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE1_FLAG         0x00002000    //0000 0000 0000 0000   0010 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE2_FLAG         0x00004000    //0000 0000 0000 0000   0100 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE3_FLAG         0x00008000    //0000 0000 0000 0000   1000 0000 0000 0000
-
-#ifdef CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-#define GESTURE_WAKEUP_MODE_RESERVE4_FLAG         0x00010000    //0000 0000 0000 0001   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE5_FLAG         0x00020000    //0000 0000 0000 0010   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE6_FLAG         0x00040000    //0000 0000 0000 0100   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE7_FLAG         0x00080000    //0000 0000 0000 1000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE8_FLAG         0x00100000    //0000 0000 0001 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE9_FLAG         0x00200000    //0000 0000 0010 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE10_FLAG        0x00400000    //0000 0000 0100 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE11_FLAG        0x00800000    //0000 0000 1000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE12_FLAG        0x01000000    //0000 0001 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE13_FLAG        0x02000000    //0000 0010 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE14_FLAG        0x04000000    //0000 0100 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE15_FLAG        0x08000000    //0000 1000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE16_FLAG        0x10000000    //0001 0000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE17_FLAG        0x20000000    //0010 0000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE18_FLAG        0x40000000    //0100 0000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE19_FLAG        0x80000000    //1000 0000 0000 0000   0000 0000 0000 0000
-
-#define GESTURE_WAKEUP_MODE_RESERVE20_FLAG        0x00000001    //0000 0000 0000 0000   0000 0000 0000 0001
-#define GESTURE_WAKEUP_MODE_RESERVE21_FLAG        0x00000002    //0000 0000 0000 0000   0000 0000 0000 0010
-#define GESTURE_WAKEUP_MODE_RESERVE22_FLAG        0x00000004    //0000 0000 0000 0000   0000 0000 0000 0100
-#define GESTURE_WAKEUP_MODE_RESERVE23_FLAG        0x00000008    //0000 0000 0000 0000   0000 0000 0000 1000
-#define GESTURE_WAKEUP_MODE_RESERVE24_FLAG        0x00000010    //0000 0000 0000 0000   0000 0000 0001 0000
-#define GESTURE_WAKEUP_MODE_RESERVE25_FLAG        0x00000020    //0000 0000 0000 0000   0000 0000 0010 0000
-#define GESTURE_WAKEUP_MODE_RESERVE26_FLAG        0x00000040    //0000 0000 0000 0000   0000 0000 0100 0000
-#define GESTURE_WAKEUP_MODE_RESERVE27_FLAG        0x00000080    //0000 0000 0000 0000   0000 0000 1000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE28_FLAG        0x00000100    //0000 0000 0000 0000   0000 0001 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE29_FLAG        0x00000200    //0000 0000 0000 0000   0000 0010 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE30_FLAG        0x00000400    //0000 0000 0000 0000   0000 0100 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE31_FLAG        0x00000800    //0000 0000 0000 0000   0000 1000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE32_FLAG        0x00001000    //0000 0000 0000 0000   0001 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE33_FLAG        0x00002000    //0000 0000 0000 0000   0010 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE34_FLAG        0x00004000    //0000 0000 0000 0000   0100 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE35_FLAG        0x00008000    //0000 0000 0000 0000   1000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE36_FLAG        0x00010000    //0000 0000 0000 0001   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE37_FLAG        0x00020000    //0000 0000 0000 0010   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE38_FLAG        0x00040000    //0000 0000 0000 0100   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE39_FLAG        0x00080000    //0000 0000 0000 1000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE40_FLAG        0x00100000    //0000 0000 0001 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE41_FLAG        0x00200000    //0000 0000 0010 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE42_FLAG        0x00400000    //0000 0000 0100 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE43_FLAG        0x00800000    //0000 0000 1000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE44_FLAG        0x01000000    //0000 0001 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE45_FLAG        0x02000000    //0000 0010 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE46_FLAG        0x04000000    //0000 0100 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE47_FLAG        0x08000000    //0000 1000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE48_FLAG        0x10000000    //0001 0000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE49_FLAG        0x20000000    //0010 0000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE50_FLAG        0x40000000    //0100 0000 0000 0000   0000 0000 0000 0000
-#define GESTURE_WAKEUP_MODE_RESERVE51_FLAG        0x80000000    //1000 0000 0000 0000   0000 0000 0000 0000
-#endif //CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
+#define GESTURE_WAKEUP_MODE_DOUBLE_CLICK_FLAG     0x0001    //0000 0000 0000 0001
+#define GESTURE_WAKEUP_MODE_UP_DIRECT_FLAG        0x0002    //0000 0000 0000 0010
+#define GESTURE_WAKEUP_MODE_DOWN_DIRECT_FLAG      0x0004    //0000 0000 0000 0100
+#define GESTURE_WAKEUP_MODE_LEFT_DIRECT_FLAG      0x0008    //0000 0000 0000 1000
+#define GESTURE_WAKEUP_MODE_RIGHT_DIRECT_FLAG     0x0010    //0000 0000 0001 0000
+#define GESTURE_WAKEUP_MODE_m_CHARACTER_FLAG      0x0020    //0000 0000 0010 0000
+#define GESTURE_WAKEUP_MODE_W_CHARACTER_FLAG      0x0040    //0000 0000 0100 0000
+#define GESTURE_WAKEUP_MODE_C_CHARACTER_FLAG      0x0080    //0000 0000 1000 0000
+#define GESTURE_WAKEUP_MODE_e_CHARACTER_FLAG      0x0100    //0000 0001 0000 0000
+#define GESTURE_WAKEUP_MODE_V_CHARACTER_FLAG      0x0200    //0000 0010 0000 0000
+#define GESTURE_WAKEUP_MODE_O_CHARACTER_FLAG      0x0400    //0000 0100 0000 0000
+#define GESTURE_WAKEUP_MODE_S_CHARACTER_FLAG      0x0800    //0000 1000 0000 0000
+#define GESTURE_WAKEUP_MODE_Z_CHARACTER_FLAG      0x1000    //0001 0000 0000 0000
 
 #define GESTURE_WAKEUP_PACKET_LENGTH    (6)
-
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-#define GESTURE_DEBUG_MODE_PACKET_LENGTH	(128)
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
 #ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
-#define GESTURE_WAKEUP_INFORMATION_PACKET_LENGTH	(128)
+#define GESTURE_WAKEUP_INFORMATION_PACKET_LENGTH	29//(128)
 #endif //CONFIG_ENABLE_GESTURE_INFORMATION_MODE
-
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
-#define FEATURE_GESTURE_WAKEUP_MODE         0x0001   
-#define FEATURE_GESTURE_DEBUG_MODE          0x0002
-#define FEATURE_GESTURE_INFORMATION_MODE    0x0003
-
-#define FEATURE_TOUCH_DRIVER_DEBUG_LOG      0x0010
-#define FEATURE_FIRMWARE_DATA_LOG           0x0011
-#define FEATURE_FORCE_TO_UPDATE_FIRMWARE    0x0012
-
 
 /*--------------------------------------------------------------------------*/
 /* PREPROCESSOR MACRO DEFINITION                                            */
 /*--------------------------------------------------------------------------*/
 
-extern int tp_dbg;
-
-
-#define I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE   (20) // delay 20ms
-
-#define FIRMWARE_FILE_PATH_ON_SD_CARD      "/mnt/sdcard/msctp_update.bin"
-
-
-/*
- * Note.
- * The below flag is used to enable the output log mechanism while touch device driver is running.
- * If this flag is not defined, the function for output log will be disabled.
- * By default, this flag is enabled.
- */
-#define CONFIG_ENABLE_TOUCH_DRIVER_DEBUG_LOG (1)   // 1 : Enable, 0 : Disable
-
-/*=============================================================*/
-// EXTERN VARIABLE DECLARATION
-/*=============================================================*/
-
-extern u8 IS_TOUCH_DRIVER_DEBUG_LOG_ENABLED;
-
-/*--------------------------------------------------------------------------*/
-/* PREPROCESSOR MACRO DEFINITION                                            */
-/*--------------------------------------------------------------------------*/
-
-#define DBG(fmt, arg...) do {\
-	                           if (tp_dbg == 1)\
-	                               printk(fmt, ##arg);\
-                         } while (0)
-
+#ifdef CONFIG_ENABLE_TOUCH_DRIVER_DEBUG
+//#define DBG(fmt, arg...) pr_info(fmt, ##arg)
+#define DBG(fmt, arg...) printk(fmt, ##arg)
+#else
+#define DBG(fmt, arg...)
+#endif
 
 /*--------------------------------------------------------------------------*/
 /* DATA TYPE DEFINITION                                                     */
@@ -533,8 +345,7 @@ typedef enum
 typedef enum
 {
     ITO_TEST_MODE_OPEN_TEST = 1,
-    ITO_TEST_MODE_SHORT_TEST = 2,
-    ITO_TEST_MODE_WATERPROOF_TEST = 3
+    ITO_TEST_MODE_SHORT_TEST = 2
 } ItoTestMode_e;
 
 typedef enum
@@ -546,21 +357,13 @@ typedef enum
     ITO_TEST_UNDER_TESTING
 
 } ItoTestResult_e;
-
+//merged by pangle at 20150228 begin
 typedef enum
 {
     ADDRESS_MODE_8BIT = 0,
     ADDRESS_MODE_16BIT = 1
 } AddressMode_e;
-
-typedef enum
-{
-    MUTUAL = 0,
-    SELF,
-    WATERPROOF,
-    MUTUAL_SINGLE_DRIVE
-} ItoTestFwMode_e;
-
+//merged by pangle at 20150228 end
 /*--------------------------------------------------------------------------*/
 /* GLOBAL VARIABLE DEFINITION                                               */
 /*--------------------------------------------------------------------------*/
@@ -575,6 +378,5 @@ extern u32 DrvCommonConvertCharToHexDigit(char *pCh, u32 nLength);
 extern u32 DrvCommonCrcDoReflect(u32 nRef, s8 nCh);
 extern u32 DrvCommonCrcGetValue(u32 nText, u32 nPrevCRC);
 extern void DrvCommonCrcInitTable(void);
-extern void DrvCommonReadFile(char *pFilePath, u8 *pBuf, u16 nLength);
 
 #endif  /* __MSTAR_DRV_COMMON_H__ */

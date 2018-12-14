@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -32,6 +33,9 @@
 /*--------------------------------------------------------------------------*/
 
 #include "mstar_drv_common.h"
+//add by shihuijun for pocket mode updatedate 20150228
+#include <linux/sensors.h>
+
 
 /*--------------------------------------------------------------------------*/
 /* GLOBAL FUNCTION DECLARATION                                              */
@@ -39,12 +43,16 @@
 
 extern s32 /*__devinit*/ MsDrvInterfaceTouchDeviceProbe(struct i2c_client *pClient, const struct i2c_device_id *pDeviceId);
 extern s32 /*__devexit*/ MsDrvInterfaceTouchDeviceRemove(struct i2c_client *pClient);
-#ifdef CONFIG_ENABLE_NOTIFIER_FB
-extern int MsDrvInterfaceTouchDeviceFbNotifierCallback(struct notifier_block *pSelf, unsigned long nEvent, void *pData);
-#else
+#if defined(CONFIG_FB)
+extern int fb_notifier_callback(struct notifier_block *self,
+				 unsigned long event, void *data);
+extern void MsDrvInterfaceTouchDeviceResume(void);        
+extern void MsDrvInterfaceTouchDeviceSuspend(void);
+#endif
+#if defined(CONFIG_HAS_EARLYSUSPEND)
 extern void MsDrvInterfaceTouchDeviceResume(struct early_suspend *pSuspend);        
 extern void MsDrvInterfaceTouchDeviceSuspend(struct early_suspend *pSuspend);
-#endif //CONFIG_ENABLE_NOTIFIER_FB
+#endif
 extern void MsDrvInterfaceTouchDeviceSetIicDataRate(struct i2c_client *pClient, u32 nIicDataRate);
         
 #endif  /* __MSTAR_DRV_PLATFORM_INTERFACE_H__ */

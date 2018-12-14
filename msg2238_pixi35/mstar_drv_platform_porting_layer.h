@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -43,24 +44,12 @@
 #include <linux/regulator/consumer.h>
 #endif //CONFIG_ENABLE_REGULATOR_POWER_ON
 
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-#include <linux/input/vir_ps.h> 
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM)
 
 #ifdef CONFIG_ENABLE_REGULATOR_POWER_ON
 #include <linux/regulator/consumer.h>
 #endif //CONFIG_ENABLE_REGULATOR_POWER_ON
 
-#ifdef CONFIG_ENABLE_NOTIFIER_FB
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#endif //CONFIG_ENABLE_NOTIFIER_FB
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-#include <linux/input/vir_ps.h> 
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
 
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
 
@@ -72,14 +61,10 @@
 #include <linux/hwmsen_helper.h>
 //#include <linux/hw_module_info.h>
 
+#include <linux/fs.h>
+#include <asm/uaccess.h>
 #include <linux/namei.h>
 #include <linux/vmalloc.h>
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-#include <linux/hwmsensor.h>
-#include <linux/hwmsen_dev.h>
-#include <linux/sensors_io.h>
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
 
 #include <mach/mt_pm_ldo.h>
 #include <mach/mt_typedefs.h>
@@ -89,7 +74,6 @@
 #include <cust_eint.h>
 #include "tpd.h"
 #include "cust_gpio_usage.h"
-#include <pmic_drv.h>
 
 #endif
 
@@ -106,11 +90,11 @@
 // TODO : Please FAE colleague to confirm with customer device driver engineer about the value of RST and INT GPIO setting
 #define MS_TS_MSG_IC_GPIO_RST   GPIO_TOUCH_RESET //53 //35 
 #define MS_TS_MSG_IC_GPIO_INT   GPIO_TOUCH_IRQ   //52 //37
-
+//modify by pangle at 20150228 begin
 #ifdef CONFIG_TP_HAVE_KEY
-#define TOUCH_KEY_MENU (158) //229
-#define TOUCH_KEY_HOME (139) //102
-#define TOUCH_KEY_BACK (172)
+#define TOUCH_KEY_MENU (139) //229
+#define TOUCH_KEY_HOME (172) //102
+#define TOUCH_KEY_BACK (158)
 #define TOUCH_KEY_SEARCH (217)
 
 #define MAX_KEY_NUM (4)
@@ -124,13 +108,13 @@
 
 #ifdef CONFIG_TP_HAVE_KEY
 #define TOUCH_KEY_MENU (158) //229
-#define TOUCH_KEY_HOME (139) //102
-#define TOUCH_KEY_BACK (172)
-//#define TOUCH_KEY_SEARCH (217)
+#define TOUCH_KEY_HOME (172) //102
+#define TOUCH_KEY_BACK (139)
+#define TOUCH_KEY_SEARCH (217)
 
-#define MAX_KEY_NUM (3)
+#define MAX_KEY_NUM (4)
 #endif //CONFIG_TP_HAVE_KEY
-
+//modify by pangle at 20150228 end
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
 
 #define MS_TS_MSG_IC_GPIO_RST   (GPIO_CTP_RST_PIN)
@@ -153,8 +137,13 @@
 
 extern void DrvPlatformLyrDisableFingerTouchReport(void);
 extern void DrvPlatformLyrEnableFingerTouchReport(void);
+extern void DrvPlatformLyrDisableFingerTouchIrqWake(void);
+extern void DrvPlatformLyrEnableFingerTouchIrqWake(void);
 extern void DrvPlatformLyrFingerTouchPressed(s32 nX, s32 nY, s32 nPressure, s32 nId);
-extern void DrvPlatformLyrFingerTouchReleased(s32 nX, s32 nY, s32 nId);
+extern void DrvPlatformLyrFingerTouchReleased(s32 nX, s32 nY);
+#if defined(CONFIG_FB)
+extern void call_back_functions_init(void);
+#endif
 extern s32 DrvPlatformLyrInputDeviceInitialize(struct i2c_client *pClient);
 extern void DrvPlatformLyrSetIicDataRate(struct i2c_client *pClient, u32 nIicDataRate);
 extern void DrvPlatformLyrTouchDevicePowerOff(void);
@@ -162,20 +151,10 @@ extern void DrvPlatformLyrTouchDevicePowerOn(void);
 #ifdef CONFIG_ENABLE_REGULATOR_POWER_ON
 extern void DrvPlatformLyrTouchDeviceRegulatorPowerOn(void);
 #endif //CONFIG_ENABLE_REGULATOR_POWER_ON
-extern int DrvPlatformLyrTouchDeviceVoltageInit(struct i2c_client *client,bool on);//zxzadd
-extern int DrvPlatformLyrTouchDeviceVoltageControl(bool on);//zxzadd
 extern void DrvPlatformLyrTouchDeviceRegisterEarlySuspend(void);
 extern s32 DrvPlatformLyrTouchDeviceRegisterFingerTouchInterruptHandler(void);
 extern s32 DrvPlatformLyrTouchDeviceRemove(struct i2c_client *pClient);
 extern s32 DrvPlatformLyrTouchDeviceRequestGPIO(void);        
 extern void DrvPlatformLyrTouchDeviceResetHw(void);
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-extern int DrvPlatformLyrGetTpPsData(void);
-#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM)
-extern void DrvPlatformLyrTpPsEnable(int nEnable);
-#elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
-extern int DrvPlatformLyrTpPsOperate(void* pSelf, u32 nCommand, void* pBuffIn, int nSizeIn, void* pBuffOut, int nSizeOut, int* pActualOut);
-#endif
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
         
 #endif  /* __MSTAR_DRV_PLATFORM_PORTING_LAYER_H__ */

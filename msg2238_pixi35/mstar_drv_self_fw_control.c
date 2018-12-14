@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
  
@@ -31,15 +32,10 @@
 #include "mstar_drv_self_fw_control.h"
 #include "mstar_drv_utility_adaption.h"
 #include "mstar_drv_platform_porting_layer.h"
-
-#if defined(CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC)
-
+#include <linux/input/mt.h>   //modify by pangle for report typed B at 20150417
 /*=============================================================*/
 // EXTERN VARIABLE DECLARATION
 /*=============================================================*/
-
-extern u32 SLAVE_I2C_ID_DBBUS;
-extern u32 SLAVE_I2C_ID_DWI2C;
 
 #ifdef CONFIG_TP_HAVE_KEY
 extern const int g_TpVirtualKey[];
@@ -51,70 +47,50 @@ extern const int g_TpVirtualKeyDimLocal[][4];
 
 extern struct input_dev *g_InputDevice;
 
-extern u8 g_FwData[MAX_UPDATE_FIRMWARE_BUFFER_SIZE][1024];
+extern u8 g_FwData[94][1024];
 extern u32 g_FwDataCount;
 
 extern struct mutex g_Mutex;
 
-extern u16 FIRMWARE_MODE_UNKNOWN_MODE;
-extern u16 FIRMWARE_MODE_DEMO_MODE;
-extern u16 FIRMWARE_MODE_DEBUG_MODE;
-extern u16 FIRMWARE_MODE_RAW_DATA_MODE;
-
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
 extern struct kobject *g_TouchKObj;
-extern u8 g_IsSwitchModeByAPK;
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
-extern u8 IS_FIRMWARE_DATA_LOG_ENABLED;
-extern u8 IS_FORCE_TO_UPDATE_FIRMWARE_ENABLED;
-
-#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-extern struct kobject *g_GestureKObj;
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-#endif //CONFIG_ENABLE_GESTURE_WAKEUP
-
-#ifdef CONFIG_ENABLE_COUNT_REPORT_RATE
-extern u32 g_IsEnableReportRate;
-extern u32 g_InterruptCount;
-extern u32 g_ValidTouchCount;
-
-extern struct timeval g_StartTime;
-#endif //CONFIG_ENABLE_COUNT_REPORT_RATE
+extern int _gIrq;
 
 /*=============================================================*/
 // LOCAL VARIABLE DEFINITION
 /*=============================================================*/
 
-static u8 _gTpVendorCode[3] = {0};
-
-//static u8 _gDwIicInfoData[1024];
+//static u8 _gTpVendorCode[3] = {0};
+#ifndef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
+static u8 _gDwIicInfoData[1024];
+#endif
 static u8 _gOneDimenFwData[MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE*1024+MSG22XX_FIRMWARE_INFO_BLOCK_SIZE] = {0}; // used for MSG22XX
-
+//static u8 szDbBusTxData[1024] = {0};
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 /*
  * Note.
  * Please modify the name of the below .h depends on the vendor TP that you are using.
  */
-//modify by Yang.XU for upgrade fw to V5.15[2015.10.12][PR1063126]
-#include "msg22xx_xxxx_v15_update_bin.h"
-#include "msg22xx_yyyy_update_bin.h"
+#include "msg2xxx_hxd_update_bin.h"
+#include "msg2xxx_xxxx_update_bin.h"
+#include "msg2xxx_yyyy_update_bin.h"
 
 static u32 _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
-static struct work_struct _gUpdateFirmwareBySwIdWork;
-static struct workqueue_struct *_gUpdateFirmwareBySwIdWorkQueue = NULL;
+//static struct work_struct _gUpdateFirmwareBySwIdWork;
+//static struct workqueue_struct *_gUpdateFirmwareBySwIdWorkQueue = NULL;
 
 static u32 _gIsUpdateInfoBlockFirst = 0;
+static u8 _gIsUpdateFirmware = 0x00;
+static u8 preTouchStatus; //Previous Touch VA Status;
+
 #endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-static u32 _gGestureWakeupValue[2] = {0};
+static u16 _gGestureWakeupValue = 0;
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
-#ifdef CONFIG_ENABLE_CHARGER_DETECTION
-static u8 _gChargerPlugIn = 0;
-#endif //CONFIG_ENABLE_CHARGER_DETECTION
-
-static u8 _gIsDisableFinagerTouch = 0;
 
 /*=============================================================*/
 // GLOBAL VARIABLE DEFINITION
@@ -123,60 +99,30 @@ static u8 _gIsDisableFinagerTouch = 0;
 u8 g_ChipType = 0;
 u8 g_DemoModePacket[DEMO_MODE_PACKET_LENGTH] = {0};
 
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
 FirmwareInfo_t g_FirmwareInfo;
-u8 g_LogModePacket[DEBUG_MODE_PACKET_LENGTH] = {0};
-u16 g_FirmwareMode; 
+
+u8 *g_LogModePacket = NULL;
+u16 g_FirmwareMode = FIRMWARE_MODE_DEMO_MODE; 
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
+u8 *_gGestureWakeupPacket = NULL;
 
-#if defined(CONFIG_ENABLE_GESTURE_DEBUG_MODE)
-u8 _gGestureWakeupPacket[GESTURE_DEBUG_MODE_PACKET_LENGTH] = {0};
-#elif defined(CONFIG_ENABLE_GESTURE_INFORMATION_MODE)
-u8 _gGestureWakeupPacket[GESTURE_WAKEUP_INFORMATION_PACKET_LENGTH] = {0};
-#else
-u8 _gGestureWakeupPacket[DEMO_MODE_PACKET_LENGTH] = {0}; // for MSG21XXA : packet length(DEMO_MODE_PACKET_LENGTH) , for MSG22XX : packet length(GESTURE_WAKEUP_PACKET_LENGTH)
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-u8 g_GestureDebugFlag = 0x00;
-u8 g_GestureDebugMode = 0x00;
-u8 g_LogGestureDebug[GESTURE_DEBUG_MODE_PACKET_LENGTH] = {0};
-#endif // CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
+u16 g_GestureWakeupMode = 0x0000;
 #ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
 u32 g_LogGestureInfor[GESTURE_WAKEUP_INFORMATION_PACKET_LENGTH] = {0};
 #endif //CONFIG_ENABLE_GESTURE_INFORMATION_MODE
-
-#ifdef CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE // support at most 64 types of gesture wakeup mode
-u32 g_GestureWakeupMode[2] = {0xFFFFFFFF, 0xFFFFFFFF};
-#else                                              // support at most 16 types of gesture wakeup mode
-u32 g_GestureWakeupMode[2] = {0x00000000, 0x00000000};	//changed by Yang.XU, set close double click to default.
-#endif //CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-
 u8 g_GestureWakeupFlag = 0;
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-u8 g_EnableTpProximity = 0;
-#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM)
-u8 g_FaceClosingTp = 0; // for QCOM platform -> 1 : close to, 0 : far away 
-#elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
-u8 g_FaceClosingTp = 1; // for MTK platform -> 0 : close to, 1 : far away 
-#endif
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
-#ifdef CONFIG_ENABLE_CHARGER_DETECTION
-u8 g_ForceUpdate = 0;
-#endif //CONFIG_ENABLE_CHARGER_DETECTION
-
-u8 g_IsUpdateFirmware = 0x00;
 
 /*=============================================================*/
 // LOCAL FUNCTION DECLARATION
 /*=============================================================*/
 
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork);
+//merged by pangle at 20150228
+static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(void);
 #endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
@@ -185,13 +131,11 @@ static void _DrvFwCtrlCoordinate(u8 *pRawData, u32 *pTranX, u32 *pTranY);
 #endif //CONFIG_ENABLE_GESTURE_INFORMATION_MODE
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
-static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmemType);
-
 /*=============================================================*/
 // LOCAL FUNCTION DEFINITION
 /*=============================================================*/
 
-#if 0
+#ifndef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 static void _DrvFwCtrlEraseEmemC32(void)
 {
     DBG("*** %s() ***\n", __func__);
@@ -230,7 +174,7 @@ static void _DrvFwCtrlEraseEmemC32(void)
     // trigger gpio load
     RegSetLByteValue(0x160E, 0x10);
 }
-
+#endif
 static void _DrvFwCtrlEraseEmemC33(EmemType_e eEmemType)
 {
     DBG("*** %s() ***\n", __func__);
@@ -269,8 +213,7 @@ static void _DrvFwCtrlEraseEmemC33(EmemType_e eEmemType)
         RegSetLByteValue(0x160E, 0x08); //erase all block
     }
 }
-#endif
-
+#if 0
 static void _DrvFwCtrlMsg22xxGetTpVendorCode(u8 *pTpVendorCode)
 {
     DBG("*** %s() ***\n", __func__);
@@ -296,11 +239,17 @@ static void _DrvFwCtrlMsg22xxGetTpVendorCode(u8 *pTpVendorCode)
         // RIU password
         RegSet16BitValue(0x161A, 0xABBA); 
 
+        // Clear pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
+
         RegSet16BitValue(0x1600, 0xC1E9); // Set start address for tp vendor code on info block(Actually, start reading from 0xC1E8)
     
         // Enable burst mode
 //        RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
 
+        // Set pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
+    
         RegSetLByteValue(0x160E, 0x01); 
 
         nRegData1 = RegGet16BitValue(0x1604);
@@ -327,14 +276,15 @@ static void _DrvFwCtrlMsg22xxGetTpVendorCode(u8 *pTpVendorCode)
         DbBusExitSerialDebugMode();
 
         DrvPlatformLyrTouchDeviceResetHw();
+        mdelay(100);
     }
 }
+#endif
 
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 static void _DrvFwCtrlMsg22xxEraseEmem(EmemType_e eEmemType)
 {
     u32 i;
-    u32 nTimeOut = 0;
     u16 nRegData = 0;
     
     DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
@@ -369,27 +319,12 @@ static void _DrvFwCtrlMsg22xxEraseEmem(EmemType_e eEmemType)
         RegSet16BitValue(0x160E, BIT3);
 
         DBG("Wait erase done flag\n");
-        
-        while (1) // Wait erase done flag
+
+        do // Wait erase done flag
         {
             nRegData = RegGet16BitValue(0x1610); // Memory status
-            nRegData = nRegData & BIT1;
-            
-            DBG("Wait erase done flag nRegData = 0x%x\n", nRegData);
-
-            if (nRegData == BIT1)
-            {
-                break;		
-            }
             mdelay(50);
-
-            if ((nTimeOut ++) > 30)
-            {
-                DBG("Erase all block failed. Timeout.\n");
-
-                goto EraseEnd;
-            }
-        }
+        } while((nRegData & BIT1) != BIT1);
     }
     else if (eEmemType == EMEM_MAIN) // 48KB (32+8+8)
     {
@@ -419,29 +354,11 @@ static void _DrvFwCtrlMsg22xxEraseEmem(EmemType_e eEmemType)
 
             DBG("Wait erase done flag\n");
 
-            nRegData = 0;
-            nTimeOut = 0;
-            
-            while (1) // Wait erase done flag
+            do // Wait erase done flag
             {
                 nRegData = RegGet16BitValue(0x1610); // Memory status
-                nRegData = nRegData & BIT1;
-            
-                DBG("Wait erase done flag nRegData = 0x%x\n", nRegData);
-
-                if (nRegData == BIT1)
-                {
-                    break;		
-                }
                 mdelay(50);
-
-                if ((nTimeOut ++) > 30)
-                {
-                    DBG("Erase main block failed. Timeout.\n");
-
-                    goto EraseEnd;
-                }
-            }
+            } while((nRegData & BIT1) != BIT1);
         }   
     }
     else if (eEmemType == EMEM_INFO) // 512Byte
@@ -459,56 +376,37 @@ static void _DrvFwCtrlMsg22xxEraseEmem(EmemType_e eEmemType)
 
         DBG("Wait erase done flag\n");
 
-        while (1) // Wait erase done flag
+        do // Wait erase done flag
         {
             nRegData = RegGet16BitValue(0x1610); // Memory status
-            nRegData = nRegData & BIT1;
-        
-            DBG("Wait erase done flag nRegData = 0x%x\n", nRegData);
-
-            if (nRegData == BIT1)
-            {
-                break;		
-            }
             mdelay(50);
-
-            if ((nTimeOut ++) > 30)
-            {
-                DBG("Erase info block failed. Timeout.\n");
-
-                goto EraseEnd;
-            }
-        }
+        } while((nRegData & BIT1) != BIT1);
     }
     
-    EraseEnd:
-    
     DBG("Erase end\n");
-
+    
     DbBusIICNotUseBus();
     DbBusNotStopMCU();
     DbBusExitSerialDebugMode();
 }
-
-static void _DrvFwCtrlMsg22xxProgramEmem(EmemType_e eEmemType) 
+int program_over = 0;
+static void _DrvFwCtrlMsg22xxProgramEmem(EmemType_e eEmemType) // For MSG22XX
 {
     u32 i, j; 
     u32 nRemainSize = 0, nBlockSize = 0, nSize = 0, index = 0;
-    u32 nTimeOut = 0;
-    u16 nRegData = 0;
-#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
+    u16 nRegData;
     u8 szDbBusTxData[128] = {0};
+#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
     u32 nSizePerWrite = 125;
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM)
-    u8 szDbBusTxData[1024] = {0};
     u32 nSizePerWrite = 1021;
 #endif
 
     DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
-
+    memset(szDbBusTxData, 0, sizeof(szDbBusTxData));
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
@@ -601,38 +499,29 @@ static void _DrvFwCtrlMsg22xxProgramEmem(EmemType_e eEmemType)
 
     DBG("Wait write done flag\n");
 
-    while (1) // Wait write done flag
+    // Polling 0x1610 is 0x0002
+    do
     {
-        // Polling 0x1610 is 0x0002
-        nRegData = RegGet16BitValue(0x1610); // Memory status
+        nRegData = RegGet16BitValue(0x1610);
         nRegData = nRegData & BIT1;
-    
-        DBG("Wait write done flag nRegData = 0x%x\n", nRegData);
-
-        if (nRegData == BIT1)
-        {
-            break;		
-        }
         mdelay(10);
 
-        if ((nTimeOut ++) > 30)
-        {
-            DBG("Write failed. Timeout.\n");
-
-            goto ProgramEnd;
-        }
-    }
-
-    ProgramEnd:
+    } while (nRegData != BIT1); // Wait write done flag
 
     DBG("Program end\n");
 
     DbBusIICNotUseBus();
     DbBusNotStopMCU();
     DbBusExitSerialDebugMode();
+
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 }
 #endif
-static u32 _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EmemType_e eEmemType) 
+static u32 _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EmemType_e eEmemType) // For MSG22XX
 {
     u16 nCrcDown = 0;
     u32 nRetVal = 0; 
@@ -718,69 +607,89 @@ static void _DrvFwCtrlMsg22xxConvertFwDataTwoDimenToOneDimen(u8 szTwoDimenFwData
         }
     }
 }
-
+//modify by pangle for report typed B at 20150417 begin
+#ifdef CHANGE_REPORT_TYPE_TO_B    //add by byron 
+static u32 Distance(u16 X,u16 Y,u16 preX,u16 preY)
+{ 
+	u32 temp=0;
+	
+	temp=(((X-preX)*(X-preX))+((Y-preY)*(Y-preY)));
+	return temp;
+}
+#endif
+#ifdef CHANGE_REPORT_TYPE_TO_B    //add by byron 
+	 u8 press[2] = {0,0};
+#endif
 static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
 {
     u8 nCheckSum = 0;
     u32 nDeltaX = 0, nDeltaY = 0;
     u32 nX = 0;
     u32 nY = 0;
+#ifdef CHANGE_REPORT_TYPE_TO_B    //add by byron 
+	 u8 i;
+	 //static u8 preTouchStatus; //Previous Touch VA Status;
+	
+	 //static u8 press[2] = {0,0};
+	
+	 static u8 preTouchNum=0; 
+	 static u16 preX[2]={0xffff,0xffff};
+	 static u16 preY[2]={0xffff,0xffff};
+	 static u8 prepress[2]={0,0};
+	 u16 XX[2]={0,0};
+	 u16 YY[2]={0,0};
+	 u16 temp = 0;
+	 u8 changepoints=0;
+	 //prepress[2] = {0,0};
+	 press[0] = 0;
+	 press[1] = 0;
+	 //preTouchStatus = 0;
+#endif
+//modify by pangle for report typed B at 20150417 end
 #ifdef CONFIG_SWAP_X_Y
     u32 nTempX;
     u32 nTempY;
 #endif
-    u8 nCheckSumIndex = nLength-1; //Set default checksum index for demo mode
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    u8 nCheckSumIndex = 0;
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
-    DBG("*** %s() ***\n", __func__);
+//    DBG("*** %s() ***\n", __func__);
 
-#ifdef CONFIG_ENABLE_COUNT_REPORT_RATE
-    if (g_IsEnableReportRate == 1)
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    if (g_FirmwareMode == FIRMWARE_MODE_DEMO_MODE)
     {
-        if (g_InterruptCount == 4294967296)
-        {
-            g_InterruptCount = 0; // Reset count if overflow
-            DBG("g_InterruptCount reset to 0\n");
-        }	
-
-        if (g_InterruptCount == 0)
-        {
-            // Get start time
-            do_gettimeofday(&g_StartTime);
-    
-            DBG("Start time : %lu sec, %lu msec\n", g_StartTime.tv_sec,  g_StartTime.tv_usec); 
-        }
-        
-        g_InterruptCount ++;
-
-        DBG("g_InterruptCount = %d\n", g_InterruptCount);
+        nCheckSumIndex = 7;
     }
-#endif //CONFIG_ENABLE_COUNT_REPORT_RATE
-
-    if (IS_FIRMWARE_DATA_LOG_ENABLED)
+    else if (g_FirmwareMode == FIRMWARE_MODE_DEBUG_MODE || g_FirmwareMode == FIRMWARE_MODE_RAW_DATA_MODE)
     {
-        if (g_FirmwareMode == FIRMWARE_MODE_DEMO_MODE)
-        {
-            nCheckSumIndex = 7;
-        }
-        else if (g_FirmwareMode == FIRMWARE_MODE_DEBUG_MODE || g_FirmwareMode == FIRMWARE_MODE_RAW_DATA_MODE)
-        {
-            nCheckSumIndex = 31;
-        }
-
-#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-        if (g_GestureWakeupFlag == 1)
-        {
-            nCheckSumIndex = nLength-1;
-        }
-#endif //CONFIG_ENABLE_GESTURE_WAKEUP
-    } //IS_FIRMWARE_DATA_LOG_ENABLED
-    
-    nCheckSum = DrvCommonCalculateCheckSum(&pPacket[0], nCheckSumIndex);
-    DBG("check sum : [%x] == [%x]? \n", pPacket[nCheckSumIndex], nCheckSum);
+        nCheckSumIndex = 31;
+    }
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
     if (g_GestureWakeupFlag == 1)
     {
+        nCheckSumIndex = nLength-1;
+    }
+#endif //CONFIG_ENABLE_GESTURE_WAKEUP
+
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    nCheckSum = DrvCommonCalculateCheckSum(&pPacket[0], nCheckSumIndex);
+    DBG("check sum : [%x] == [%x]? \n", pPacket[nCheckSumIndex], nCheckSum);
+#else
+    nCheckSum = DrvCommonCalculateCheckSum(&pPacket[0], (nLength-1));
+//    DBG("check ksum : [%x] == [%x]? \n", pPacket[nLength-1], nCheckSum);
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
+
+
+#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
+    if (g_GestureWakeupFlag == 1)
+    {   
+//add by shihuijun for pocket updatedate 20150302 begin
+    // if(!proximity_open_flag)
+	  {
         u8 nWakeupMode = 0;
         u8 bIsCorrectFormat = 0;
 
@@ -788,34 +697,13 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
         DBG("pPacket[0]=%x \n pPacket[1]=%x pPacket[2]=%x pPacket[3]=%x pPacket[4]=%x pPacket[5]=%x \n", \
             pPacket[0], pPacket[1], pPacket[2], pPacket[3], pPacket[4], pPacket[5]);
 
-        if (g_ChipType == CHIP_TYPE_MSG22XX && pPacket[0] == 0xA7 && pPacket[1] == 0x00 && pPacket[2] == 0x06 && pPacket[3] == PACKET_TYPE_GESTURE_WAKEUP)
+        if (g_ChipType == CHIP_TYPE_MSG22XX && pPacket[0] == 0xA7 && pPacket[1] == 0x00 && pPacket[2] == 0x06 && pPacket[3] == 0x50)
         {
             nWakeupMode = pPacket[4];
             bIsCorrectFormat = 1;
         } 
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-        else if (g_ChipType == CHIP_TYPE_MSG22XX && pPacket[0] == 0xA7 && pPacket[1] == 0x00 && pPacket[2] == 0x80 && pPacket[3] == PACKET_TYPE_GESTURE_DEBUG)
-        {
-            u32 a = 0;
-
-            nWakeupMode = pPacket[4];
-            bIsCorrectFormat = 1;
-            
-            for (a = 0; a < 0x80; a ++)
-            {
-                g_LogGestureDebug[a] = pPacket[a];
-            }
-            
-            if (!(pPacket[5] >> 7))// LCM Light Flag = 0
-            {
-                nWakeupMode = 0xFE;
-                DBG("gesture debug mode LCM flag = 0\n");
-            }
-        }
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
 #ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
-        else if (g_ChipType == CHIP_TYPE_MSG22XX && pPacket[0] == 0xA7 && pPacket[1] == 0x00 && pPacket[2] == 0x80 && pPacket[3] == PACKET_TYPE_GESTURE_INFORMATION)
+        else if (g_ChipType == CHIP_TYPE_MSG22XX && pPacket[0] == 0xA7 && pPacket[1] == 0x00 && pPacket[2] == 0x1D && pPacket[3] == PACKET_TYPE_GESTURE_INFORMATION)
         {
             u32 a = 0;
             u32 nTmpCount = 0;
@@ -829,7 +717,7 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
                 nTmpCount++;
             }
 
-            for (a = 6; a < 126; a = a+3)//parse packet to coordinate
+            for (a = 6; a < 27; a = a+3)//parse packet to coordinate
             {
                 u32 nTranX = 0;
                 u32 nTranY = 0;
@@ -841,9 +729,9 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
                 nTmpCount++;
             }
             
-            g_LogGestureInfor[nTmpCount] = pPacket[126]; //Dummy
+            g_LogGestureInfor[nTmpCount] = pPacket[27]; //Dummy
             nTmpCount++;
-            g_LogGestureInfor[nTmpCount] = pPacket[127]; //checksum
+            g_LogGestureInfor[nTmpCount] = pPacket[28]; //checksum
             nTmpCount++;
             DBG("gesture information mode Count = %d\n", nTmpCount);
         }
@@ -861,828 +749,195 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
             switch (nWakeupMode)
             {
                 case 0x58:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_DOUBLE_CLICK_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_DOUBLE_CLICK_FLAG;
 
-                    DBG("Light up screen by DOUBLE_CLICK gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by DOUBLE_CLICK gesture wakeup.\n");
 
                     input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
                     input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
-                    break;		
+                    break;	
+
                 case 0x60:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_UP_DIRECT_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_UP_DIRECT_FLAG;
                     
-                    DBG("Light up screen by UP_DIRECT gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by UP_DIRECT gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_UP, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_UP, 1);
+ //                   input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_UP, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_UP, 0);
+ //                   input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;		
                 case 0x61:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_DOWN_DIRECT_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_DOWN_DIRECT_FLAG;
 
-                    DBG("Light up screen by DOWN_DIRECT gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by DOWN_DIRECT gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_DOWN, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_DOWN, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_DOWN, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_DOWN, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;		
                 case 0x62:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_LEFT_DIRECT_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_LEFT_DIRECT_FLAG;
 
-                    DBG("Light up screen by LEFT_DIRECT gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by LEFT_DIRECT gesture wakeup.\n");
 
-//                  input_report_key(g_InputDevice, KEY_LEFT, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                  input_report_key(g_InputDevice, KEY_LEFT, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_LEFT, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_LEFT, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;		
                 case 0x63:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RIGHT_DIRECT_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_RIGHT_DIRECT_FLAG;
 
-                    DBG("Light up screen by RIGHT_DIRECT gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by RIGHT_DIRECT gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_RIGHT, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_RIGHT, 1);
+//                   input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_RIGHT, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_RIGHT, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
-                    break;		
+                    break;	
+//modify  by pangle for gesture display 20150304 begin	
+	#ifdef GESTURE_ALL_SWITCH
                 case 0x64:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_m_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_m_CHARACTER_FLAG;
 
-                    DBG("Light up screen by m_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by m_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_M, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_M, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_M, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_M, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;		
                 case 0x65:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_W_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_W_CHARACTER_FLAG;
 
-                    DBG("Light up screen by W_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by W_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_W, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_W, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_W, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_W, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;		
                 case 0x66:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_C_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_C_CHARACTER_FLAG;
 
-                    DBG("Light up screen by C_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by C_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_C, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_C, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_C, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_C, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;
                 case 0x67:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_e_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_e_CHARACTER_FLAG;
 
-                    DBG("Light up screen by e_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by e_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_E, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_E, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_E, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_E, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;
                 case 0x68:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_V_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_V_CHARACTER_FLAG;
 
-                    DBG("Light up screen by V_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by V_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_V, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_V, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_V, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_V, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;
                 case 0x69:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_O_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_O_CHARACTER_FLAG;
 
-                    DBG("Light up screen by O_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by O_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_O, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_O, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_O, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_O, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;
                 case 0x6A:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_S_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_S_CHARACTER_FLAG;
 
-                    DBG("Light up screen by S_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by S_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_S, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_S, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_S, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_S, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;
                 case 0x6B:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_Z_CHARACTER_FLAG;
+                    _gGestureWakeupValue = GESTURE_WAKEUP_MODE_Z_CHARACTER_FLAG;
 
-                    DBG("Light up screen by Z_CHARACTER gesture wakeup.\n");
+                    PRINTF_ERR("Light up screen by Z_CHARACTER gesture wakeup.\n");
 
-//                    input_report_key(g_InputDevice, KEY_Z, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
+                    input_report_key(g_InputDevice, KEY_Z, 1);
+//                    input_report_key(g_InputDevice, KEY_POWER, 1);
                     input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, KEY_Z, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x6C:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE1_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE1_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER1, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER1, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
+                    input_report_key(g_InputDevice, KEY_Z, 0);
+//                    input_report_key(g_InputDevice, KEY_POWER, 0);
                     input_sync(g_InputDevice);
                     break;
-                case 0x6D:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE2_FLAG;
+#endif 
+//modify  by pangle for gesture display 20150304 end 
 
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE2_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER2, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER2, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x6E:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE3_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE3_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER3, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER3, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-#ifdef CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-                case 0x6F:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE4_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE4_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER4, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER4, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x70:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE5_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE5_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER5, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER5, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x71:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE6_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE6_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER6, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER6, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x72:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE7_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE7_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER7, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER7, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x73:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE8_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE8_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER8, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER8, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x74:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE9_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE9_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER9, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER9, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x75:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE10_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE10_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER10, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER10, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x76:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE11_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE11_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER11, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER11, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x77:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE12_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE12_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER12, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER12, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x78:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE13_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE13_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER13, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER13, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x79:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE14_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE14_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER14, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER14, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x7A:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE15_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE15_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER15, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER15, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x7B:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE16_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE16_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER16, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER16, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x7C:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE17_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE17_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER17, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER17, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x7D:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE18_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE18_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER18, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER18, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x7E:
-                    _gGestureWakeupValue[0] = GESTURE_WAKEUP_MODE_RESERVE19_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE19_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER19, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER19, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x7F:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE20_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE20_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER20, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER20, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x80:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE21_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE21_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER21, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER21, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x81:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE22_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE22_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER22, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER22, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x82:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE23_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE23_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER23, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER23, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x83:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE24_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE24_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER24, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER24, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x84:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE25_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE25_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER25, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER25, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x85:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE26_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE26_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER26, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER26, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x86:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE27_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE27_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER27, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER27, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x87:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE28_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE28_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER28, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER28, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x88:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE29_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE29_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER29, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER29, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x89:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE30_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE30_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER30, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER30, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x8A:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE31_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE31_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER31, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER31, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x8B:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE32_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE32_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER32, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER32, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x8C:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE33_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE33_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER33, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER33, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x8D:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE34_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE34_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER34, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER34, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x8E:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE35_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE35_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER35, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER35, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x8F:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE36_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE36_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER36, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER36, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x90:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE37_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE37_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER37, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER37, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x91:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE38_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE38_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER38, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER38, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x92:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE39_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE39_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER39, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER39, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x93:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE40_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE40_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER40, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER40, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x94:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE41_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE41_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER41, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER41, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x95:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE42_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE42_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER42, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER42, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x96:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE43_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE43_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER43, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER43, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x97:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE44_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE44_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER44, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER44, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x98:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE45_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE45_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER45, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER45, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x99:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE46_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE46_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER46, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER46, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x9A:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE47_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE47_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER47, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER47, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x9B:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE48_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE48_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER48, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER48, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x9C:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE49_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE49_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER49, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER49, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x9D:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE50_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE50_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER50, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER50, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-                case 0x9E:
-                    _gGestureWakeupValue[1] = GESTURE_WAKEUP_MODE_RESERVE51_FLAG;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_RESERVE51_FLAG gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER51, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER51, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-#endif //CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-				case 0xFF://Gesture Fail
-	            	_gGestureWakeupValue[1] = 0xFF;
-
-                    DBG("Light up screen by GESTURE_WAKEUP_MODE_FAIL gesture wakeup.\n");
-
-//                    input_report_key(g_InputDevice, RESERVER51, 1);
-                    input_report_key(g_InputDevice, KEY_POWER, 1);
-                    input_sync(g_InputDevice);
-//                    input_report_key(g_InputDevice, RESERVER51, 0);
-                    input_report_key(g_InputDevice, KEY_POWER, 0);
-                    input_sync(g_InputDevice);
-                    break;
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
                 default:
-                    _gGestureWakeupValue[0] = 0;
-                    _gGestureWakeupValue[1] = 0;
-                    DBG("Un-supported gesture wakeup mode. Please check your device driver code.\n");
+                    _gGestureWakeupValue = 0;
                     break;		
             }
 
-            DBG("_gGestureWakeupValue[0] = 0x%x\n", _gGestureWakeupValue[0]);
-            DBG("_gGestureWakeupValue[1] = 0x%x\n", _gGestureWakeupValue[1]);
+            DBG("_gGestureWakeupValue = 0x%x\n", _gGestureWakeupValue);
         }
         else
         {
             DBG("gesture wakeup packet format is incorrect.\n");
+           }
         }
-        
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-		// Notify android application to retrieve log data mode packet from device driver by sysfs.
-		if (g_GestureKObj != NULL && pPacket[3] == PACKET_TYPE_GESTURE_DEBUG)
-		{
-			char *pEnvp[2];
-			s32 nRetVal = 0;
-
-			pEnvp[0] = "STATUS=GET_GESTURE_DEBUG";
-			pEnvp[1] = NULL;
-
-			nRetVal = kobject_uevent_env(g_GestureKObj, KOBJ_CHANGE, pEnvp);
-			DBG("kobject_uevent_env() nRetVal = %d\n", nRetVal);
-
-		}
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
+    // else
+    // 	{
+    //     DBG("***psensor sheltered, not parsepacket and not read gesture!***\n");
+	//    }
+//add by shihuijun for pocket updatedate 20150302 end		    
         return -1;
     }
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
-
+#if 0
     DBG("received raw data from touch panel as following:\n");
     DBG("pPacket[0]=%x \n pPacket[1]=%x pPacket[2]=%x pPacket[3]=%x pPacket[4]=%x \n pPacket[5]=%x pPacket[6]=%x pPacket[7]=%x \n", \
                 pPacket[0], pPacket[1], pPacket[2], pPacket[3], pPacket[4], pPacket[5], pPacket[6], pPacket[7]);
-
+#endif
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
     if ((pPacket[nCheckSumIndex] == nCheckSum) && (pPacket[0] == 0x52))   // check the checksum of packet
+#else
+    if ((pPacket[nLength-1] == nCheckSum) && (pPacket[0] == 0x52))   // check the checksum of packet
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
     {
         nX = (((pPacket[1] & 0xF0) << 4) | pPacket[2]);         // parse the packet to coordinate
         nY = (((pPacket[1] & 0x0F) << 8) | pPacket[3]);
@@ -1690,8 +945,8 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
         nDeltaX = (((pPacket[4] & 0xF0) << 4) | pPacket[5]);
         nDeltaY = (((pPacket[4] & 0x0F) << 8) | pPacket[6]);
 
-        DBG("[x,y]=[%d,%d]\n", nX, nY);
-        DBG("[delta_x,delta_y]=[%d,%d]\n", nDeltaX, nDeltaY);
+//        DBG("[x,y]=[%d,%d]\n", nX, nY);
+//        DBG("[delta_x,delta_y]=[%d,%d]\n", nDeltaX, nDeltaY);
 
 #ifdef CONFIG_SWAP_X_Y
         nTempY = nX;
@@ -1727,60 +982,7 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
 
             if ((pPacket[5] != 0x00) && (pPacket[5] != 0xFF)) /* pPacket[5] is key value */
             {   /* 0x00 is key up, 0xff is touch screen up */
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM)
-                DBG("g_EnableTpProximity = %d, pPacket[5] = 0x%x\n", g_EnableTpProximity, pPacket[5]);
-
-                if (g_EnableTpProximity && ((pPacket[5] == 0x80) || (pPacket[5] == 0x40)))
-                {
-                    if (pPacket[5] == 0x80) // close to
-                    {
-                        g_FaceClosingTp = 1;
-                    }
-                    else if (pPacket[5] == 0x40) // far away
-                    {
-                        g_FaceClosingTp = 0;
-                    }
-
-                    DBG("g_FaceClosingTp = %d\n", g_FaceClosingTp);
-                   
-                    return -1;
-                }
-#elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
-                if (g_EnableTpProximity && ((pPacket[5] == 0x80) || (pPacket[5] == 0x40)))
-                {
-                    int nErr;
-                    hwm_sensor_data tSensorData;
-
-                    if (pPacket[5] == 0x80) // close to
-                    {
-                        g_FaceClosingTp = 0;
-                    }
-                    else if (pPacket[5] == 0x40) // far away
-                    {
-                        g_FaceClosingTp = 1;
-                    }
-                    
-                    DBG("g_FaceClosingTp = %d\n", g_FaceClosingTp);
-
-                    // map and store data to hwm_sensor_data
-                    tSensorData.values[0] = DrvPlatformLyrGetTpPsData();
-                    tSensorData.value_divide = 1;
-                    tSensorData.status = SENSOR_STATUS_ACCURACY_MEDIUM;
-                    // let up layer to know
-                    if ((nErr = hwmsen_get_interrupt_data(ID_PROXIMITY, &tSensorData)))
-                    {
-                        DBG("call hwmsen_get_interrupt_data() failed = %d\n", nErr);
-                    }
-                    
-                    return -1;
-                }
-#endif               
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
-                /* 0x00 is key up, 0xff is touch screen up */
-                DBG("touch key down pPacket[5]=%d\n", pPacket[5]);
-
+                //DBG("touch key down pPacket[5]=%d\n", pPacket[5]);
                 pInfo->nFingerNum = 1;
                 pInfo->nTouchKeyCode = pPacket[5];
                 pInfo->nTouchKeyMode = 1;
@@ -1820,18 +1022,22 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
             }
             else
             {   /* key up or touch up */
-                DBG("touch end\n");
+//                DBG("touch end\n");
                 pInfo->nFingerNum = 0; //touch end
                 pInfo->nTouchKeyCode = 0;
                 pInfo->nTouchKeyMode = 0;    
             }
+//modify by pangle for report typed B at 20150417 begin
+#ifdef CHANGE_REPORT_TYPE_TO_B   // add by byron 
+				preTouchStatus=0;
+#endif
         }
         else
         {
             pInfo->nTouchKeyMode = 0; //Touch on screen...
 
 //            if ((nDeltaX == 0) && (nDeltaY == 0))
-            if (
+          if(
 #ifdef CONFIG_REVERSE_X
                 (nDeltaX == 4095)
 #else
@@ -1843,13 +1049,18 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
 #else
                 (nDeltaY == 0)
 #endif
-                )
+            )
             {   /* one touch point */
                 pInfo->nFingerNum = 1; // one touch
                 pInfo->tPoint[0].nX = (nX * TOUCH_SCREEN_X_MAX) / TPD_WIDTH;
                 pInfo->tPoint[0].nY = (nY * TOUCH_SCREEN_Y_MAX) / TPD_HEIGHT;
-                DBG("[%s]: [x,y]=[%d,%d]\n", __func__, nX, nY);
-                DBG("[%s]: point[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[0].nX, pInfo->tPoint[0].nY);
+//                DBG("[%s]: [x,y]=[%d,%d]\n", __func__, nX, nY);
+//                DBG("[%s]: point[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[0].nX, pInfo->tPoint[0].nY);
+
+#ifdef CHANGE_REPORT_TYPE_TO_B   // add by byron 
+				press[0]=1;
+				press[1]=0;
+#endif
             }
             else
             {   /* two touch points */
@@ -1859,7 +1070,7 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
                 /* Finger 1 */
                 pInfo->tPoint[0].nX = (nX * TOUCH_SCREEN_X_MAX) / TPD_WIDTH;
                 pInfo->tPoint[0].nY = (nY * TOUCH_SCREEN_Y_MAX) / TPD_HEIGHT;
-                DBG("[%s]: point1[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[0].nX, pInfo->tPoint[0].nY);
+//                DBG("[%s]: point1[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[0].nX, pInfo->tPoint[0].nY);
                 /* Finger 2 */
                 if (nDeltaX > 2048)     // transform the unsigned value to signed value
                 {
@@ -1876,10 +1087,83 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
 
                 pInfo->tPoint[1].nX = (nX2 * TOUCH_SCREEN_X_MAX) / TPD_WIDTH; 
                 pInfo->tPoint[1].nY = (nY2 * TOUCH_SCREEN_Y_MAX) / TPD_HEIGHT;
-                DBG("[%s]: point2[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[1].nX, pInfo->tPoint[1].nY);
+                //DBG("[%s]: point2[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[1].nX, pInfo->tPoint[1].nY);
+
+#ifdef CHANGE_REPORT_TYPE_TO_B   // add by byron 
+				press[0]=1;
+				press[1]=1;
+#endif
             }
+			
+#ifdef CHANGE_REPORT_TYPE_TO_B   // add by byron 
+
+			if(preTouchStatus==1)
+			{
+				for(i=0;i<2;i++)
+				{
+				XX[i]=pInfo->tPoint[i].nX;
+				YY[i]=pInfo->tPoint[i].nY;
+				}
+				if(/*(touchData->nFingerNum==1)&&*/(preTouchNum==2))
+				{
+					if(Distance(XX[0],YY[0],preX[0],preY[0])>Distance(XX[0],YY[0],preX[1],preY[1]))
+						changepoints=1;
+				}
+				if((pInfo->nFingerNum==2)&&(preTouchNum==1))
+				{
+					if(prepress[0]==1)
+					{
+						if(Distance(XX[0],YY[0],preX[0],preY[0])>Distance(XX[1],YY[1],preX[0],preY[0]))
+						changepoints=1;
+					}
+					else
+					{
+						if(Distance(XX[0],YY[0],preX[1],preY[1])<Distance(XX[1],YY[1],preX[1],preY[1]))
+						changepoints=1;
+					}
+				}
+				if((pInfo->nFingerNum==1)&&(preTouchNum==1))
+				{
+					if(press[0]!=prepress[0])
+						changepoints=1;
+				}
+				if((pInfo->nFingerNum==2)&&(preTouchNum==2))
+				{
+				//
+				}
+
+				if(changepoints==1)
+				{
+					temp=press[0];
+					press[0]=press[1];
+					press[1]=temp;
+
+					temp=pInfo->tPoint[0].nX;
+					pInfo->tPoint[0].nX=pInfo->tPoint[1].nX;
+					pInfo->tPoint[1].nX=temp;
+
+					temp=pInfo->tPoint[0].nY;
+					pInfo->tPoint[0].nY=pInfo->tPoint[1].nY;
+					pInfo->tPoint[1].nY=temp;
+				}
+
+				
+			}
+				//save current status
+				for(i=0;i<2;i++)
+				{
+					prepress[i]=press[i];
+					preX[i]=pInfo->tPoint[i].nX;
+					preY[i]=pInfo->tPoint[i].nY;
+				}
+				preTouchNum=pInfo->nFingerNum;
+				//end of save current status
+				 preTouchStatus=1;
+#endif
+//modify by pangle for report typed B at 20150417 end
         }
     }
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
     else if (pPacket[nCheckSumIndex] == nCheckSum && pPacket[0] == 0x62)
     {
         nX = ((pPacket[1] << 8) | pPacket[2]);  // Position_X
@@ -1925,7 +1209,7 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
 
             if ((pPacket[8] != 0x00) && (pPacket[8] != 0xFF)) /* pPacket[8] is key value */
             {   /* 0x00 is key up, 0xff is touch screen up */
-                DBG("touch key down pPacket[8]=%d\n", pPacket[8]);
+                //DBG("touch key down pPacket[8]=%d\n", pPacket[8]);
                 pInfo->nFingerNum = 1;
                 pInfo->nTouchKeyCode = pPacket[8];
                 pInfo->nTouchKeyMode = 1;
@@ -1965,7 +1249,7 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
             }
             else
             {   /* key up or touch up */
-                DBG("touch end\n");
+//                DBG("touch end\n");
                 pInfo->nFingerNum = 0; //touch end
                 pInfo->nTouchKeyCode = 0;
                 pInfo->nTouchKeyMode = 0;    
@@ -2021,7 +1305,7 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
 
                 pInfo->tPoint[1].nX = (nX2 * TOUCH_SCREEN_X_MAX) / TPD_WIDTH; 
                 pInfo->tPoint[1].nY = (nY2 * TOUCH_SCREEN_Y_MAX) / TPD_HEIGHT;
-                DBG("[%s]: point2[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[1].nX, pInfo->tPoint[1].nY);
+                //DBG("[%s]: point2[x,y]=[%d,%d]\n", __func__, pInfo->tPoint[1].nX, pInfo->tPoint[1].nY);
             }
 
             // Notify android application to retrieve log data mode packet from device driver by sysfs.   
@@ -2040,8 +1324,6 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
     }
     else
     {
-        DBG("pPacket[0]=0x%x, pPacket[7]=0x%x, nCheckSum=0x%x\n", pPacket[0], pPacket[7], nCheckSum);
-
         if (pPacket[nCheckSumIndex] != nCheckSum)
         {
             DBG("WRONG CHECKSUM\n");
@@ -2064,9 +1346,31 @@ static s32 _DrvFwCtrlParsePacket(u8 *pPacket, u16 nLength, TouchInfo_t *pInfo)
             return -1;
         }
     }
+#else    
+    else
+    {
+        DBG("pPacket[0]=0x%x, pPacket[7]=0x%x, nCheckSum=0x%x\n", pPacket[0], pPacket[7], nCheckSum);
+
+        if (pPacket[nLength-1] != nCheckSum)
+        {
+            DBG("WRONG CHECKSUM\n");
+            return -1;
+        }
+
+        if (pPacket[0] != 0x52)
+        {
+            DBG("WRONG DEMO MODE HEADER\n");
+            return -1;
+        }
+    }
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
     return 0;
 }
+
+//------------------------------------------------------------------------------//
+
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
 static void _DrvFwCtrlStoreFirmwareData(u8 *pBuf, u32 nSize)
 {
@@ -2112,7 +1416,592 @@ static void _DrvFwCtrlStoreFirmwareData(u8 *pBuf, u32 nSize)
     }
 }
 
-static u16 _DrvFwCtrlMsg21xxaGetSwId(EmemType_e eEmemType) 
+//-------------------------Start of SW ID for MSG22XX----------------------------//
+
+static u32 _DrvFwCtrlMsg22xxRetrieveFirmwareCrcFromEFlash(EmemType_e eEmemType) // For MSG22XX
+{
+    u32 nRetVal = 0; 
+    u16 nRegData1 = 0, nRegData2 = 0;
+
+    DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
+
+    DbBusEnterSerialDebugMode();
+    DbBusStopMCU();
+    DbBusIICUseBus();
+    DbBusIICReshape();
+    mdelay(100);
+
+    // Stop mcu
+    RegSetLByteValue(0x0FE6, 0x01); 
+
+    // Stop watchdog
+    RegSet16BitValue(0x3C60, 0xAA55);
+
+    // RIU password
+    RegSet16BitValue(0x161A, 0xABBA); 
+
+    // Clear pce
+    RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
+
+    if (eEmemType == EMEM_MAIN) // Read main block CRC(48KB-4) from main block
+    {
+        RegSet16BitValue(0x1600, 0xBFFC); // Set start address for main block CRC
+    }
+    else if (eEmemType == EMEM_INFO) // Read info block CRC(512Byte-4) from info block
+    {
+        RegSet16BitValue(0x1600, 0xC1FC); // Set start address for info block CRC
+    }
+    
+    // Enable burst mode
+    RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
+
+    // Set pce
+    RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
+    
+    RegSetLByteValue(0x160E, 0x01); 
+
+    nRegData1 = RegGet16BitValue(0x1604);
+    nRegData2 = RegGet16BitValue(0x1606);
+
+    nRetVal  = ((nRegData2 >> 8) & 0xFF) << 24;
+    nRetVal |= (nRegData2 & 0xFF) << 16;
+    nRetVal |= ((nRegData1 >> 8) & 0xFF) << 8;
+    nRetVal |= (nRegData1 & 0xFF);
+    
+    DBG("CRC = 0x%x\n", nRetVal);
+
+    // Clear burst mode
+    RegSet16BitValue(0x160C, RegGet16BitValue(0x160C) & (~0x01));      
+
+    RegSet16BitValue(0x1600, 0x0000); 
+
+    // Clear RIU password
+    RegSet16BitValue(0x161A, 0x0000); 
+
+    DbBusIICNotUseBus();
+    DbBusNotStopMCU();
+    DbBusExitSerialDebugMode();
+
+    return nRetVal;	
+}
+
+static u32 _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(u8 szTmpBuf[], EmemType_e eEmemType) // For MSG22XX
+{
+    u32 nRetVal = 0; 
+    
+    DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
+    
+    if (szTmpBuf != NULL)
+    {
+        if (eEmemType == EMEM_MAIN) // Read main block CRC(48KB-4) from bin file
+        {
+            nRetVal  = szTmpBuf[0xBFFF] << 24;
+            nRetVal |= szTmpBuf[0xBFFE] << 16;
+            nRetVal |= szTmpBuf[0xBFFD] << 8;
+            nRetVal |= szTmpBuf[0xBFFC];
+        }
+        else if (eEmemType == EMEM_INFO) // Read info block CRC(512Byte-4) from bin file
+        {
+            nRetVal  = szTmpBuf[0xC1FF] << 24;
+            nRetVal |= szTmpBuf[0xC1FE] << 16;
+            nRetVal |= szTmpBuf[0xC1FD] << 8;
+            nRetVal |= szTmpBuf[0xC1FC];
+        }
+    }
+
+    return nRetVal;
+}
+
+static u16 _DrvFwCtrlMsg22xxGetSwId(EmemType_e eEmemType) // For MSG22XX
+{
+    u16 nRetVal = 0; 
+    u16 nRegData1 = 0;
+
+    DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
+
+    DbBusEnterSerialDebugMode();
+    DbBusStopMCU();
+    DbBusIICUseBus();
+    DbBusIICReshape();
+    mdelay(100);
+
+    // Stop mcu
+    RegSetLByteValue(0x0FE6, 0x01); 
+
+    // Stop watchdog
+    RegSet16BitValue(0x3C60, 0xAA55);
+
+    // RIU password
+    RegSet16BitValue(0x161A, 0xABBA); 
+
+    // Clear pce
+    RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
+
+    if (eEmemType == EMEM_MAIN) // Read SW ID from main block
+    {
+        RegSet16BitValue(0x1600, 0xBFF4); // Set start address for main block SW ID
+    }
+    else if (eEmemType == EMEM_INFO) // Read SW ID from info block
+    {
+        RegSet16BitValue(0x1600, 0xC1EC); // Set start address for info block SW ID
+    }
+
+    /*
+      Ex. SW ID in Main Block :
+          Major low byte at address 0xBFF4
+          Major high byte at address 0xBFF5
+          
+          SW ID in Info Block :
+          Major low byte at address 0xC1EC
+          Major high byte at address 0xC1ED
+    */
+    
+    // Enable burst mode
+//    RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
+
+    // Set pce
+    RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
+    
+    RegSetLByteValue(0x160E, 0x01); 
+
+    nRegData1 = RegGet16BitValue(0x1604);
+//    nRegData2 = RegGet16BitValue(0x1606);
+
+    nRetVal = ((nRegData1 >> 8) & 0xFF) << 8;
+    nRetVal |= (nRegData1 & 0xFF);
+    
+    // Clear burst mode
+//    RegSet16BitValue(0x160C, RegGet16BitValue(0x160C) & (~0x01));      
+
+    RegSet16BitValue(0x1600, 0x0000); 
+
+    // Clear RIU password
+    RegSet16BitValue(0x161A, 0x0000); 
+    
+    DBG("SW ID = 0x%x\n", nRetVal);
+
+    DbBusIICNotUseBus();
+    DbBusNotStopMCU();
+    DbBusExitSerialDebugMode();
+
+    return nRetVal;		
+}
+
+static s32 _DrvFwCtrlMsg22xxUpdateFirmwareBySwId(void) // For MSG22XX
+{
+    s32 nRetVal = -1;
+    u32 nCrcInfoA = 0, nCrcInfoB = 0, nCrcMainA = 0, nCrcMainB = 0;
+    
+    DBG("*** %s() ***\n", __func__);
+    
+    DBG("_gIsUpdateInfoBlockFirst = %d, _gIsUpdateFirmware = 0x%x\n", _gIsUpdateInfoBlockFirst, _gIsUpdateFirmware);
+
+    _DrvFwCtrlMsg22xxConvertFwDataTwoDimenToOneDimen(g_FwData, _gOneDimenFwData);
+    
+    if (_gIsUpdateInfoBlockFirst == 1)
+    {
+        if ((_gIsUpdateFirmware & 0x10) == 0x10)
+        {
+            _DrvFwCtrlMsg22xxEraseEmem(EMEM_INFO);
+            _DrvFwCtrlMsg22xxProgramEmem(EMEM_INFO);
+ 
+            nCrcInfoA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_INFO);
+            nCrcInfoB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
+
+            DBG("nCrcInfoA = 0x%x, nCrcInfoB = 0x%x\n", nCrcInfoA, nCrcInfoB);
+        
+            if (nCrcInfoA == nCrcInfoB)
+            {
+                _DrvFwCtrlMsg22xxEraseEmem(EMEM_MAIN);
+                _DrvFwCtrlMsg22xxProgramEmem(EMEM_MAIN);
+
+                nCrcMainA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_MAIN);
+                nCrcMainB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
+
+                DBG("nCrcMainA = 0x%x, nCrcMainB = 0x%x\n", nCrcMainA, nCrcMainB);
+        		
+                if (nCrcMainA == nCrcMainB)
+                {
+                    _gIsUpdateFirmware = 0x00;
+                    nRetVal = 0;
+                }
+                else
+                {
+                    _gIsUpdateFirmware = 0x01;
+                }
+            }
+            else
+            {
+                _gIsUpdateFirmware = 0x11;
+            }
+        }
+        else if ((_gIsUpdateFirmware & 0x01) == 0x01)
+        {
+            _DrvFwCtrlMsg22xxEraseEmem(EMEM_MAIN);
+            _DrvFwCtrlMsg22xxProgramEmem(EMEM_MAIN);
+
+            nCrcMainA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_MAIN);
+            nCrcMainB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
+
+            DBG("nCrcMainA=0x%x, nCrcMainB=0x%x\n", nCrcMainA, nCrcMainB);
+    		
+            if (nCrcMainA == nCrcMainB)
+            {
+                _gIsUpdateFirmware = 0x00;
+                nRetVal = 0;
+            }
+            else
+            {
+                _gIsUpdateFirmware = 0x01;
+            }
+        }
+    }
+    else //_gIsUpdateInfoBlockFirst == 0
+    {
+        if ((_gIsUpdateFirmware & 0x10) == 0x10)
+        {
+            _DrvFwCtrlMsg22xxEraseEmem(EMEM_MAIN);
+            _DrvFwCtrlMsg22xxProgramEmem(EMEM_MAIN);
+
+            nCrcMainA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_MAIN);
+            nCrcMainB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
+
+            DBG("nCrcMainA=0x%x, nCrcMainB=0x%x\n", nCrcMainA, nCrcMainB);
+
+            if (nCrcMainA == nCrcMainB)
+            {
+                _DrvFwCtrlMsg22xxEraseEmem(EMEM_INFO);
+                _DrvFwCtrlMsg22xxProgramEmem(EMEM_INFO);
+
+                nCrcInfoA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_INFO);
+                nCrcInfoB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
+                
+                DBG("nCrcInfoA=0x%x, nCrcInfoB=0x%x\n", nCrcInfoA, nCrcInfoB);
+
+                if (nCrcInfoA == nCrcInfoB)
+                {
+                    _gIsUpdateFirmware = 0x00;
+                    nRetVal = 0;
+                }
+                else
+                {
+                    _gIsUpdateFirmware = 0x01;
+                }
+            }
+            else
+            {
+                _gIsUpdateFirmware = 0x11;
+            }
+        }
+        else if ((_gIsUpdateFirmware & 0x01) == 0x01)
+        {
+            _DrvFwCtrlMsg22xxEraseEmem(EMEM_INFO);
+            _DrvFwCtrlMsg22xxProgramEmem(EMEM_INFO);
+
+            nCrcInfoA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_INFO);
+            nCrcInfoB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
+
+            DBG("nCrcInfoA=0x%x, nCrcInfoB=0x%x\n", nCrcInfoA, nCrcInfoB);
+
+            if (nCrcInfoA == nCrcInfoB)
+            {
+                _gIsUpdateFirmware = 0x00;
+                nRetVal = 0;
+            }
+            else
+            {
+                _gIsUpdateFirmware = 0x01;
+            }
+        }    		
+    }
+    
+    return nRetVal;	
+}
+
+void _DrvFwCtrlMsg22xxCheckFirmwareUpdateBySwId(void) // For MSG22XX
+{
+    u32 nCrcMainA, nCrcInfoA, nCrcMainB, nCrcInfoB;
+    u32 i;
+    u16 nUpdateBinMajor = 0, nUpdateBinMinor = 0;
+    u16 nMajor = 0, nMinor = 0;
+    u8 *pVersion = NULL;
+    Msg22xxSwId_e eSwId = MSG22XX_SW_ID_UNDEFINED;
+    
+    DBG("*** %s() ***\n", __func__);
+
+    DrvPlatformLyrDisableFingerTouchReport();
+    program_over = 0;
+    DrvFwCtrlGetCustomerFirmwareVersion(&nMajor, &nMinor, &pVersion);
+
+    nCrcMainA = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
+    nCrcMainB = _DrvFwCtrlMsg22xxRetrieveFirmwareCrcFromEFlash(EMEM_MAIN);
+
+    nCrcInfoA = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
+    nCrcInfoB = _DrvFwCtrlMsg22xxRetrieveFirmwareCrcFromEFlash(EMEM_INFO);
+/*merge by pangle at 20150228 begin*/
+ //   _gUpdateFirmwareBySwIdWorkQueue = create_singlethread_workqueue("update_firmware_by_sw_id");
+//    INIT_WORK(&_gUpdateFirmwareBySwIdWork, _DrvFwCtrlUpdateFirmwareBySwIdDoWork);
+/*merge by pangle at 20150228 end*/
+    DBG("nCrcMainA=0x%x, nCrcInfoA=0x%x, nCrcMainB=0x%x, nCrcInfoB=0x%x\n", nCrcMainA, nCrcInfoA, nCrcMainB, nCrcInfoB);
+               
+    if (nCrcMainA == nCrcMainB && nCrcInfoA == nCrcInfoB) // Case 1. Main Block:OK, Info Block:OK
+    {
+        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_MAIN);
+    		
+        if (eSwId == MSG22XX_SW_ID_HXD)
+        {
+            nUpdateBinMajor = msg2xxx_hxd_update_bin[0xBFF5]<<8 | msg2xxx_hxd_update_bin[0xBFF4];
+            nUpdateBinMinor = msg2xxx_hxd_update_bin[0xBFF7]<<8 | msg2xxx_hxd_update_bin[0xBFF6];
+        }
+        else //eSwId == MSG22XX_SW_ID_UNDEFINED
+        {
+            DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
+
+            eSwId = MSG22XX_SW_ID_UNDEFINED;
+            nUpdateBinMajor = 0;
+            nUpdateBinMinor = 0;    		        						
+        }
+    		
+        DBG("eSwId=0x%x, nMajor=%d, nMinor=%d, nUpdateBinMajor=%d, nUpdateBinMinor=%d\n", eSwId, nMajor, nMinor, nUpdateBinMajor, nUpdateBinMinor);
+
+        if (nUpdateBinMinor > nMinor)
+        {
+            if (eSwId < MSG22XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
+            {
+                if (eSwId == MSG22XX_SW_ID_HXD)
+                {
+                    for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
+                    {
+                        if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
+                        {
+                            _DrvFwCtrlStoreFirmwareData(&(msg2xxx_hxd_update_bin[i*1024]), 1024);
+                        }
+                        else // i == 48
+                        {
+                            _DrvFwCtrlStoreFirmwareData(&(msg2xxx_hxd_update_bin[i*1024]), 512);
+                        }
+                    }
+                }
+
+                g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
+
+                _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
+                _gIsUpdateInfoBlockFirst = 1; // Set 1 for indicating main block is complete 
+                _gIsUpdateFirmware = 0x11;
+     //           queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+     _DrvFwCtrlUpdateFirmwareBySwIdDoWork();
+                return;
+            }
+            else
+            {
+                DBG("The sw id is invalid.\n");
+                DBG("Go to normal boot up process.\n");
+            }
+        }
+        else
+        {
+            DBG("The update bin version is older than or equal to the current firmware version on e-flash.\n");
+            DBG("Go to normal boot up process.\n");
+        }
+    }
+    else if (nCrcMainA == nCrcMainB && nCrcInfoA != nCrcInfoB) // Case 2. Main Block:OK, Info Block:FAIL
+    {
+        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_MAIN);
+    		
+        DBG("eSwId=0x%x\n", eSwId);
+
+        if (eSwId < MSG22XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
+        {
+            if(eSwId == MSG22XX_SW_ID_HXD)
+            {
+                for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
+                {
+                    if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
+                    {
+                        _DrvFwCtrlStoreFirmwareData(&(msg2xxx_hxd_update_bin[i*1024]), 1024);
+                    }
+                    else // i == 48
+                    {
+                        _DrvFwCtrlStoreFirmwareData(&(msg2xxx_hxd_update_bin[i*1024]), 512);
+                    }
+                }
+            }
+
+            g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
+
+            _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
+            _gIsUpdateInfoBlockFirst = 1; // Set 1 for indicating main block is complete 
+            _gIsUpdateFirmware = 0x11;
+    //        queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+         _DrvFwCtrlUpdateFirmwareBySwIdDoWork();
+
+            return;
+        }
+        else
+        {
+            DBG("The sw id is invalid.\n");
+            DBG("Go to normal boot up process.\n");
+        }
+    }
+    else if (nCrcMainA != nCrcMainB && nCrcInfoA == nCrcInfoB) // Case 3. Main Block:FAIL, Info Block:OK
+    {
+        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_INFO);
+		
+        DBG("eSwId=0x%x\n", eSwId);
+
+        if (eSwId < MSG22XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
+        {
+            if(eSwId == MSG22XX_SW_ID_HXD)
+            {
+                for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
+                {
+                    if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
+                    {
+                        _DrvFwCtrlStoreFirmwareData(&(msg2xxx_hxd_update_bin[i*1024]), 1024);
+                    }
+                    else // i == 48
+                    {
+                        _DrvFwCtrlStoreFirmwareData(&(msg2xxx_hxd_update_bin[i*1024]), 512);
+                    }
+                }
+            }
+
+            g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
+
+            _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
+            _gIsUpdateInfoBlockFirst = 0; // Set 0 for indicating main block is broken 
+            _gIsUpdateFirmware = 0x11;
+     //       queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+          _DrvFwCtrlUpdateFirmwareBySwIdDoWork();
+
+            return;
+        }
+        else
+        {
+            DBG("The sw id is invalid.\n");
+            DBG("Go to normal boot up process.\n");
+        }
+    }
+    else // Case 4. Main Block:FAIL, Info Block:FAIL
+    {
+        DBG("Main block and Info block are broken.\n");
+        DBG("Go to normal boot up process.\n");
+    }
+
+    DrvPlatformLyrTouchDeviceResetHw();
+    DrvPlatformLyrEnableFingerTouchReport();
+}
+
+//-------------------------End of SW ID for MSG22XX----------------------------//
+
+//-------------------------Start of SW ID for MSG21XXA----------------------------//
+
+static u32 _DrvFwCtrlMsg21xxaCalculateMainCrcFromEFlash(void) // For MSG21XXA
+{
+    u32 nRetVal = 0; 
+    u16 nRegData = 0;
+
+    DBG("*** %s() ***\n", __func__);
+
+    DbBusEnterSerialDebugMode();
+    DbBusStopMCU();
+    DbBusIICUseBus();
+    DbBusIICReshape();
+    mdelay(100);
+
+    // Stop mcu
+    RegSetLByteValue(0x0FE6, 0x01); //bank:mheg5, addr:h0073
+
+    // Stop Watchdog
+    RegSet16BitValue(0x3C60, 0xAA55); //bank:reg_PIU_MISC_0, addr:h0030
+
+    // cmd
+    RegSet16BitValue(0x3CE4, 0xDF4C); //bank:reg_PIU_MISC_0, addr:h0072
+
+    // TP SW reset
+    RegSet16BitValue(0x1E04, 0x7d60); //bank:chip, addr:h0002
+    RegSet16BitValue(0x1E04, 0x829F);
+
+    // Start mcu
+    RegSetLByteValue(0x0FE6, 0x00); //bank:mheg5, addr:h0073
+    
+    mdelay(100);
+
+    // Polling 0x3CE4 is 0x9432
+    do
+    {
+        nRegData = RegGet16BitValue(0x3CE4); //bank:reg_PIU_MISC_0, addr:h0072
+    } while (nRegData != 0x9432);
+
+    // Read calculated main block CRC from register
+    nRetVal = RegGet16BitValue(0x3C80);
+    nRetVal = (nRetVal << 16) | RegGet16BitValue(0x3C82);
+        
+    DBG("Main Block CRC = 0x%x\n", nRetVal);
+
+    return nRetVal;	
+}
+
+static u32 _DrvFwCtrlMsg21xxaRetrieveMainCrcFromMainBlock(void) // For MSG21XXA
+{
+    u32 nRetVal = 0; 
+    u16 nRegData = 0;
+    u8 szDbBusTxData[5] = {0};
+    u8 szDbBusRxData[4] = {0};
+
+    DBG("*** %s() ***\n", __func__);
+
+    DbBusEnterSerialDebugMode();
+    DbBusStopMCU();
+    DbBusIICUseBus();
+    DbBusIICReshape();
+    mdelay(100);
+
+    // Stop mcu
+    RegSetLByteValue(0x0FE6, 0x01); //bank:mheg5, addr:h0073
+
+    // Stop watchdog
+    RegSet16BitValue(0x3C60, 0xAA55); //bank:reg_PIU_MISC_0, addr:h0030
+
+    // cmd
+    RegSet16BitValue(0x3CE4, 0xA4AB); //bank:reg_PIU_MISC_0, addr:h0072
+
+    // TP SW reset
+    RegSet16BitValue(0x1E04, 0x7d60); //bank:chip, addr:h0002
+    RegSet16BitValue(0x1E04, 0x829F);
+
+    // Start mcu
+    RegSetLByteValue(0x0FE6, 0x00); //bank:mheg5, addr:h0073
+    
+    mdelay(100);
+
+    // Polling 0x3CE4 is 0x5B58
+    do
+    {
+        nRegData = RegGet16BitValue(0x3CE4); //bank:reg_PIU_MISC_0, addr:h0072
+    } while (nRegData != 0x5B58);
+
+     // Read main block CRC from main block
+    szDbBusTxData[0] = 0x72;
+    szDbBusTxData[1] = 0x7F;
+    szDbBusTxData[2] = 0xFC;
+    szDbBusTxData[3] = 0x00;
+    szDbBusTxData[4] = 0x04;
+    
+    IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 5);
+    IicReadData(SLAVE_I2C_ID_DWI2C, &szDbBusRxData[0], 4);
+
+    nRetVal = szDbBusRxData[0];
+    nRetVal = (nRetVal << 8) | szDbBusRxData[1];
+    nRetVal = (nRetVal << 8) | szDbBusRxData[2];
+    nRetVal = (nRetVal << 8) | szDbBusRxData[3];
+   
+    DBG("CRC = 0x%x\n", nRetVal);
+
+    return nRetVal;	
+}
+
+static u16 _DrvFwCtrlMsg21xxaGetSwId(EmemType_e eEmemType) // For MSG21XXA
 {
     u16 nRetVal = 0; 
     u16 nRegData = 0;
@@ -2179,679 +2068,10 @@ static u16 _DrvFwCtrlMsg21xxaGetSwId(EmemType_e eEmemType)
     
     DBG("SW ID = 0x%x\n", nRetVal);
 
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
     return nRetVal;		
 }		
 
-static u16 _DrvFwCtrlMsg22xxGetSwId(EmemType_e eEmemType) 
-{
-    u16 nRetVal = 0; 
-    u16 nRegData1 = 0;
-
-    DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
-
-    DbBusEnterSerialDebugMode();
-    DbBusStopMCU();
-    DbBusIICUseBus();
-    DbBusIICReshape();
-    mdelay(100);
-
-    // Stop mcu
-    RegSetLByteValue(0x0FE6, 0x01); 
-
-    // Stop watchdog
-    RegSet16BitValue(0x3C60, 0xAA55);
-
-    // RIU password
-    RegSet16BitValue(0x161A, 0xABBA); 
-
-    if (eEmemType == EMEM_MAIN) // Read SW ID from main block
-    {
-        RegSet16BitValue(0x1600, 0xBFF4); // Set start address for main block SW ID
-    }
-    else if (eEmemType == EMEM_INFO) // Read SW ID from info block
-    {
-        RegSet16BitValue(0x1600, 0xC1EC); // Set start address for info block SW ID
-    }
-
-    /*
-      Ex. SW ID in Main Block :
-          Major low byte at address 0xBFF4
-          Major high byte at address 0xBFF5
-          
-          SW ID in Info Block :
-          Major low byte at address 0xC1EC
-          Major high byte at address 0xC1ED
-    */
-    
-    // Enable burst mode
-//    RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
-
-    RegSetLByteValue(0x160E, 0x01); 
-
-    nRegData1 = RegGet16BitValue(0x1604);
-//    nRegData2 = RegGet16BitValue(0x1606);
-
-    nRetVal = ((nRegData1 >> 8) & 0xFF) << 8;
-    nRetVal |= (nRegData1 & 0xFF);
-    
-    // Clear burst mode
-//    RegSet16BitValue(0x160C, RegGet16BitValue(0x160C) & (~0x01));      
-
-    RegSet16BitValue(0x1600, 0x0000); 
-
-    // Clear RIU password
-    RegSet16BitValue(0x161A, 0x0000); 
-    
-    DBG("SW ID = 0x%x\n", nRetVal);
-
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
-    return nRetVal;		
-}
-
-u32 DrvFwCtrlReadDQMemValue(u16 nAddr)
-{
-    // TODO : not support yet
-    
-    return 0;	
-}	
-
-void DrvFwCtrlWriteDQMemValue(u16 nAddr, u32 nData)
-{
-    // TODO : not support yet	
-}
-
-//------------------------------------------------------------------------------//
-
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-
-//-------------------------Start of SW ID for MSG22XX----------------------------//
-
-static u32 _DrvFwCtrlMsg22xxRetrieveFirmwareCrcFromEFlash(EmemType_e eEmemType) 
-{
-    u32 nRetVal = 0; 
-    u16 nRegData1 = 0, nRegData2 = 0;
-
-    DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
-
-    DbBusEnterSerialDebugMode();
-    DbBusStopMCU();
-    DbBusIICUseBus();
-    DbBusIICReshape();
-    mdelay(100);
-
-    // Stop mcu
-    RegSetLByteValue(0x0FE6, 0x01); 
-
-    // Stop watchdog
-    RegSet16BitValue(0x3C60, 0xAA55);
-
-    // RIU password
-    RegSet16BitValue(0x161A, 0xABBA); 
-
-    if (eEmemType == EMEM_MAIN) // Read main block CRC(48KB-4) from main block
-    {
-        RegSet16BitValue(0x1600, 0xBFFC); // Set start address for main block CRC
-    }
-    else if (eEmemType == EMEM_INFO) // Read info block CRC(512Byte-4) from info block
-    {
-        RegSet16BitValue(0x1600, 0xC1FC); // Set start address for info block CRC
-    }
-    
-    // Enable burst mode
-    RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
-
-    RegSetLByteValue(0x160E, 0x01); 
-
-    nRegData1 = RegGet16BitValue(0x1604);
-    nRegData2 = RegGet16BitValue(0x1606);
-
-    nRetVal  = ((nRegData2 >> 8) & 0xFF) << 24;
-    nRetVal |= (nRegData2 & 0xFF) << 16;
-    nRetVal |= ((nRegData1 >> 8) & 0xFF) << 8;
-    nRetVal |= (nRegData1 & 0xFF);
-    
-    DBG("CRC = 0x%x\n", nRetVal);
-
-    // Clear burst mode
-    RegSet16BitValue(0x160C, RegGet16BitValue(0x160C) & (~0x01));      
-
-    RegSet16BitValue(0x1600, 0x0000); 
-
-    // Clear RIU password
-    RegSet16BitValue(0x161A, 0x0000); 
-
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
-    return nRetVal;	
-}
-
-static u32 _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(u8 szTmpBuf[], EmemType_e eEmemType) 
-{
-    u32 nRetVal = 0; 
-    
-    DBG("*** %s() eEmemType = %d ***\n", __func__, eEmemType);
-    
-    if (szTmpBuf != NULL)
-    {
-        if (eEmemType == EMEM_MAIN) // Read main block CRC(48KB-4) from bin file
-        {
-            nRetVal  = szTmpBuf[0xBFFF] << 24;
-            nRetVal |= szTmpBuf[0xBFFE] << 16;
-            nRetVal |= szTmpBuf[0xBFFD] << 8;
-            nRetVal |= szTmpBuf[0xBFFC];
-        }
-        else if (eEmemType == EMEM_INFO) // Read info block CRC(512Byte-4) from bin file
-        {
-            nRetVal  = szTmpBuf[0xC1FF] << 24;
-            nRetVal |= szTmpBuf[0xC1FE] << 16;
-            nRetVal |= szTmpBuf[0xC1FD] << 8;
-            nRetVal |= szTmpBuf[0xC1FC];
-        }
-    }
-
-    return nRetVal;
-}
-
-static s32 _DrvFwCtrlMsg22xxUpdateFirmwareBySwId(void) 
-{
-    s32 nRetVal = -1;
-    u32 nCrcInfoA = 0, nCrcInfoB = 0, nCrcMainA = 0, nCrcMainB = 0;
-    
-    DBG("*** %s() ***\n", __func__);
-    
-    DBG("_gIsUpdateInfoBlockFirst = %d, g_IsUpdateFirmware = 0x%x\n", _gIsUpdateInfoBlockFirst, g_IsUpdateFirmware);
-
-    _DrvFwCtrlMsg22xxConvertFwDataTwoDimenToOneDimen(g_FwData, _gOneDimenFwData);
-    
-    if (_gIsUpdateInfoBlockFirst == 1)
-    {
-        if ((g_IsUpdateFirmware & 0x10) == 0x10)
-        {
-            _DrvFwCtrlMsg22xxEraseEmem(EMEM_INFO);
-            _DrvFwCtrlMsg22xxProgramEmem(EMEM_INFO);
- 
-            nCrcInfoA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_INFO);
-            nCrcInfoB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
-
-            DBG("nCrcInfoA = 0x%x, nCrcInfoB = 0x%x\n", nCrcInfoA, nCrcInfoB);
-        
-            if (nCrcInfoA == nCrcInfoB)
-            {
-                _DrvFwCtrlMsg22xxEraseEmem(EMEM_MAIN);
-                _DrvFwCtrlMsg22xxProgramEmem(EMEM_MAIN);
-
-                nCrcMainA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_MAIN);
-                nCrcMainB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
-
-                DBG("nCrcMainA = 0x%x, nCrcMainB = 0x%x\n", nCrcMainA, nCrcMainB);
-        		
-                if (nCrcMainA == nCrcMainB)
-                {
-                    g_IsUpdateFirmware = 0x00;
-                    nRetVal = 0;
-                }
-                else
-                {
-                    g_IsUpdateFirmware = 0x01;
-                }
-            }
-            else
-            {
-                g_IsUpdateFirmware = 0x11;
-            }
-        }
-        else if ((g_IsUpdateFirmware & 0x01) == 0x01)
-        {
-            _DrvFwCtrlMsg22xxEraseEmem(EMEM_MAIN);
-            _DrvFwCtrlMsg22xxProgramEmem(EMEM_MAIN);
-
-            nCrcMainA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_MAIN);
-            nCrcMainB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
-
-            DBG("nCrcMainA=0x%x, nCrcMainB=0x%x\n", nCrcMainA, nCrcMainB);
-    		
-            if (nCrcMainA == nCrcMainB)
-            {
-                g_IsUpdateFirmware = 0x00;
-                nRetVal = 0;
-            }
-            else
-            {
-                g_IsUpdateFirmware = 0x01;
-            }
-        }
-    }
-    else //_gIsUpdateInfoBlockFirst == 0
-    {
-        if ((g_IsUpdateFirmware & 0x10) == 0x10)
-        {
-            _DrvFwCtrlMsg22xxEraseEmem(EMEM_MAIN);
-            _DrvFwCtrlMsg22xxProgramEmem(EMEM_MAIN);
-
-            nCrcMainA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_MAIN);
-            nCrcMainB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
-
-            DBG("nCrcMainA=0x%x, nCrcMainB=0x%x\n", nCrcMainA, nCrcMainB);
-
-            if (nCrcMainA == nCrcMainB)
-            {
-                _DrvFwCtrlMsg22xxEraseEmem(EMEM_INFO);
-                _DrvFwCtrlMsg22xxProgramEmem(EMEM_INFO);
-
-                nCrcInfoA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_INFO);
-                nCrcInfoB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
-                
-                DBG("nCrcInfoA=0x%x, nCrcInfoB=0x%x\n", nCrcInfoA, nCrcInfoB);
-
-                if (nCrcInfoA == nCrcInfoB)
-                {
-                    g_IsUpdateFirmware = 0x00;
-                    nRetVal = 0;
-                }
-                else
-                {
-                    g_IsUpdateFirmware = 0x01;
-                }
-            }
-            else
-            {
-                g_IsUpdateFirmware = 0x11;
-            }
-        }
-        else if ((g_IsUpdateFirmware & 0x01) == 0x01)
-        {
-            _DrvFwCtrlMsg22xxEraseEmem(EMEM_INFO);
-            _DrvFwCtrlMsg22xxProgramEmem(EMEM_INFO);
-
-            nCrcInfoA = _DrvFwCtrlMsg22xxRetrieveFrimwareCrcFromBinFile(_gOneDimenFwData, EMEM_INFO);
-            nCrcInfoB = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
-
-            DBG("nCrcInfoA=0x%x, nCrcInfoB=0x%x\n", nCrcInfoA, nCrcInfoB);
-
-            if (nCrcInfoA == nCrcInfoB)
-            {
-                g_IsUpdateFirmware = 0x00;
-                nRetVal = 0;
-            }
-            else
-            {
-                g_IsUpdateFirmware = 0x01;
-            }
-        }    		
-    }
-    
-    return nRetVal;	
-}
-
-void _DrvFwCtrlMsg22xxCheckFirmwareUpdateBySwId(void)
-{
-    u32 nCrcMainA, nCrcInfoA, nCrcMainB, nCrcInfoB;
-    u32 i;
-    u16 nUpdateBinMajor = 0, nUpdateBinMinor = 0;
-    u16 nMajor = 0, nMinor = 0;
-    u8 *pVersion = NULL;
-    Msg22xxSwId_e eSwId = MSG22XX_SW_ID_UNDEFINED;
-    
-    DBG("*** %s() ***\n", __func__);
-
-    DrvPlatformLyrDisableFingerTouchReport();
-
-    nCrcMainA = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_MAIN);
-    nCrcMainB = _DrvFwCtrlMsg22xxRetrieveFirmwareCrcFromEFlash(EMEM_MAIN);
-
-    nCrcInfoA = _DrvFwCtrlMsg22xxGetFirmwareCrcByHardware(EMEM_INFO);
-    nCrcInfoB = _DrvFwCtrlMsg22xxRetrieveFirmwareCrcFromEFlash(EMEM_INFO);
-    
-    _gUpdateFirmwareBySwIdWorkQueue = create_singlethread_workqueue("update_firmware_by_sw_id");
-    INIT_WORK(&_gUpdateFirmwareBySwIdWork, _DrvFwCtrlUpdateFirmwareBySwIdDoWork);
-
-    DBG("nCrcMainA=0x%x, nCrcInfoA=0x%x, nCrcMainB=0x%x, nCrcInfoB=0x%x\n", nCrcMainA, nCrcInfoA, nCrcMainB, nCrcInfoB);
-               
-    if (nCrcMainA == nCrcMainB && nCrcInfoA == nCrcInfoB) // Case 1. Main Block:OK, Info Block:OK
-    {
-        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_MAIN);
-    		
-        if (eSwId == MSG22XX_SW_ID_XXXX)
-        {
-            nUpdateBinMajor = msg22xx_xxxx_update_bin[0xBFF5]<<8 | msg22xx_xxxx_update_bin[0xBFF4];
-            nUpdateBinMinor = msg22xx_xxxx_update_bin[0xBFF7]<<8 | msg22xx_xxxx_update_bin[0xBFF6];
-        }
-        else if (eSwId == MSG22XX_SW_ID_YYYY)
-        {
-            nUpdateBinMajor = msg22xx_yyyy_update_bin[0xBFF5]<<8 | msg22xx_yyyy_update_bin[0xBFF4];
-            nUpdateBinMinor = msg22xx_yyyy_update_bin[0xBFF7]<<8 | msg22xx_yyyy_update_bin[0xBFF6];
-        }
-        else //eSwId == MSG22XX_SW_ID_UNDEFINED
-        {
-            DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
-
-            eSwId = MSG22XX_SW_ID_UNDEFINED;
-            nUpdateBinMajor = 0;
-            nUpdateBinMinor = 0;    		        						
-        }
-    		
-        DrvFwCtrlGetCustomerFirmwareVersion(&nMajor, &nMinor, &pVersion);
-
-        DBG("eSwId=0x%x, nMajor=%d, nMinor=%d, nUpdateBinMajor=%d, nUpdateBinMinor=%d\n", eSwId, nMajor, nMinor, nUpdateBinMajor, nUpdateBinMinor);
-
-	//modify by mike.li for force upgrade fw in MINI SW[2015.09.10].
-	#ifdef MINI_MODE_TO_CTP
-	if (1)
-	#else
-	if (nUpdateBinMinor > nMinor)
-	#endif
-        {
-            if (eSwId == MSG22XX_SW_ID_XXXX)
-            {
-                for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
-                {
-                    if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
-                    {
-                        _DrvFwCtrlStoreFirmwareData(&(msg22xx_xxxx_update_bin[i*1024]), 1024);
-                    }
-                    else // i == 48
-                    {
-                        _DrvFwCtrlStoreFirmwareData(&(msg22xx_xxxx_update_bin[i*1024]), 512);
-                    }
-                }
-            }
-            else if (eSwId == MSG22XX_SW_ID_YYYY)
-            {
-                for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
-                {
-                    if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
-                    {
-                        _DrvFwCtrlStoreFirmwareData(&(msg22xx_yyyy_update_bin[i*1024]), 1024);
-                    }
-                    else // i == 48
-                    {
-                        _DrvFwCtrlStoreFirmwareData(&(msg22xx_yyyy_update_bin[i*1024]), 512);
-                    }
-                }
-            }
-            else
-            {
-                DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
-
-                eSwId = MSG22XX_SW_ID_UNDEFINED;
-            }
-
-            if (eSwId < MSG22XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
-            {
-                g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
-
-                _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
-                _gIsUpdateInfoBlockFirst = 1; // Set 1 for indicating main block is complete 
-                g_IsUpdateFirmware = 0x11;
-                queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
-                return;
-            }
-            else
-            {
-                DBG("The sw id is invalid.\n");
-                DBG("Go to normal boot up process.\n");
-            }
-        }
-        else
-        {
-            DBG("The update bin version is older than or equal to the current firmware version on e-flash.\n");
-            DBG("Go to normal boot up process.\n");
-        }
-    }
-    else if (nCrcMainA == nCrcMainB && nCrcInfoA != nCrcInfoB) // Case 2. Main Block:OK, Info Block:FAIL
-    {
-        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_MAIN);
-    		
-        DBG("eSwId=0x%x\n", eSwId);
-
-        if (eSwId == MSG22XX_SW_ID_XXXX)
-        {
-            for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
-            {
-                if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_xxxx_update_bin[i*1024]), 1024);
-                }
-                else // i == 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_xxxx_update_bin[i*1024]), 512);
-                }
-            }
-        }
-        else if (eSwId == MSG22XX_SW_ID_YYYY)
-        {
-            for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
-            {
-                if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_yyyy_update_bin[i*1024]), 1024);
-                }
-                else // i == 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_yyyy_update_bin[i*1024]), 512);
-                }
-            }
-        }
-        else
-        {
-            DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
-
-            eSwId = MSG22XX_SW_ID_UNDEFINED;
-        }
-
-        if (eSwId < MSG22XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
-        {
-            g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
-
-            _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
-            _gIsUpdateInfoBlockFirst = 1; // Set 1 for indicating main block is complete 
-            g_IsUpdateFirmware = 0x11;
-            queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
-            return;
-        }
-        else
-        {
-            DBG("The sw id is invalid.\n");
-            DBG("Go to normal boot up process.\n");
-        }
-    }
-    else if (nCrcMainA != nCrcMainB && nCrcInfoA == nCrcInfoB) // Case 3. Main Block:FAIL, Info Block:OK
-    {
-        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_INFO);
-		
-        DBG("eSwId=0x%x\n", eSwId);
-
-        if (eSwId == MSG22XX_SW_ID_XXXX)
-        {
-            for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
-            {
-                if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_xxxx_update_bin[i*1024]), 1024);
-                }
-                else // i == 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_xxxx_update_bin[i*1024]), 512);
-                }
-            }
-        }
-        else if (eSwId == MSG22XX_SW_ID_YYYY)
-        {
-            for (i = 0; i < (MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE+1); i ++)
-            {
-                if (i < MSG22XX_FIRMWARE_MAIN_BLOCK_SIZE) // i < 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_yyyy_update_bin[i*1024]), 1024);
-                }
-                else // i == 48
-                {
-                    _DrvFwCtrlStoreFirmwareData(&(msg22xx_yyyy_update_bin[i*1024]), 512);
-                }
-            }
-        }
-        else
-        {
-            DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
-
-            eSwId = MSG22XX_SW_ID_UNDEFINED;
-        }
-
-        if (eSwId < MSG22XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
-        {
-            g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
-
-            _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
-            _gIsUpdateInfoBlockFirst = 0; // Set 0 for indicating main block is broken 
-            g_IsUpdateFirmware = 0x11;
-            queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
-            return;
-        }
-        else
-        {
-            DBG("The sw id is invalid.\n");
-            DBG("Go to normal boot up process.\n");
-        }
-    }
-    else // Case 4. Main Block:FAIL, Info Block:FAIL
-    {
-        DBG("Main block and Info block are broken.\n");
-        DBG("Go to normal boot up process.\n");
-    }
-
-    DrvPlatformLyrTouchDeviceResetHw();
-
-    DrvPlatformLyrEnableFingerTouchReport();
-}
-
-//-------------------------End of SW ID for MSG22XX----------------------------//
-
-//-------------------------Start of SW ID for MSG21XXA----------------------------//
-#if 0	//del by mike.li for compile err.[2015.07.07]
-static u32 _DrvFwCtrlMsg21xxaCalculateMainCrcFromEFlash(void) 
-{
-    u32 nRetVal = 0; 
-    u16 nRegData = 0;
-
-    DBG("*** %s() ***\n", __func__);
-
-    DbBusEnterSerialDebugMode();
-    DbBusStopMCU();
-    DbBusIICUseBus();
-    DbBusIICReshape();
-    mdelay(100);
-
-    // Stop mcu
-    RegSetLByteValue(0x0FE6, 0x01); //bank:mheg5, addr:h0073
-
-    // Stop Watchdog
-    RegSet16BitValue(0x3C60, 0xAA55); //bank:reg_PIU_MISC_0, addr:h0030
-
-    // cmd
-    RegSet16BitValue(0x3CE4, 0xDF4C); //bank:reg_PIU_MISC_0, addr:h0072
-
-    // TP SW reset
-    RegSet16BitValue(0x1E04, 0x7d60); //bank:chip, addr:h0002
-    RegSet16BitValue(0x1E04, 0x829F);
-
-    // Start mcu
-    RegSetLByteValue(0x0FE6, 0x00); //bank:mheg5, addr:h0073
-    
-    mdelay(100);
-
-    // Polling 0x3CE4 is 0x9432
-    do
-    {
-        nRegData = RegGet16BitValue(0x3CE4); //bank:reg_PIU_MISC_0, addr:h0072
-//        DBG("*** reg(0x3C, 0xE4) = 0x%x ***\n", nRegData); // add for debug
-
-    } while (nRegData != 0x9432);
-
-    // Read calculated main block CRC from register
-    nRetVal = RegGet16BitValue(0x3C80);
-    nRetVal = (nRetVal << 16) | RegGet16BitValue(0x3C82);
-        
-    DBG("Main Block CRC = 0x%x\n", nRetVal);
-
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
-    return nRetVal;	
-}
-
-static u32 _DrvFwCtrlMsg21xxaRetrieveMainCrcFromMainBlock(void) 
-{
-    u32 nRetVal = 0; 
-    u16 nRegData = 0;
-    u8 szDbBusTxData[5] = {0};
-    u8 szDbBusRxData[4] = {0};
-
-    DBG("*** %s() ***\n", __func__);
-
-    DbBusEnterSerialDebugMode();
-    DbBusStopMCU();
-    DbBusIICUseBus();
-    DbBusIICReshape();
-    mdelay(100);
-
-    // Stop mcu
-    RegSetLByteValue(0x0FE6, 0x01); //bank:mheg5, addr:h0073
-
-    // Stop watchdog
-    RegSet16BitValue(0x3C60, 0xAA55); //bank:reg_PIU_MISC_0, addr:h0030
-
-    // cmd
-    RegSet16BitValue(0x3CE4, 0xA4AB); //bank:reg_PIU_MISC_0, addr:h0072
-
-    // TP SW reset
-    RegSet16BitValue(0x1E04, 0x7d60); //bank:chip, addr:h0002
-    RegSet16BitValue(0x1E04, 0x829F);
-
-    // Start mcu
-    RegSetLByteValue(0x0FE6, 0x00); //bank:mheg5, addr:h0073
-    
-    mdelay(100);
-
-    // Polling 0x3CE4 is 0x5B58
-    do
-    {
-        nRegData = RegGet16BitValue(0x3CE4); //bank:reg_PIU_MISC_0, addr:h0072
-    } while (nRegData != 0x5B58);
-
-     // Read main block CRC from main block
-    szDbBusTxData[0] = 0x72;
-    szDbBusTxData[1] = 0x7F;
-    szDbBusTxData[2] = 0xFC;
-    szDbBusTxData[3] = 0x00;
-    szDbBusTxData[4] = 0x04;
-    
-    IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 5);
-    IicReadData(SLAVE_I2C_ID_DWI2C, &szDbBusRxData[0], 4);
-
-    nRetVal = szDbBusRxData[0];
-    nRetVal = (nRetVal << 8) | szDbBusRxData[1];
-    nRetVal = (nRetVal << 8) | szDbBusRxData[2];
-    nRetVal = (nRetVal << 8) | szDbBusRxData[3];
-   
-    DBG("CRC = 0x%x\n", nRetVal);
-
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
-    return nRetVal;	
-}
-
-static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_e eEmemType) 
+static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_e eEmemType) // For MSG21XXA
 {
     u32 i, j, nCalculateCrcSize;
     u32 nCrcMain = 0, nCrcMainTp = 0;
@@ -2866,17 +2086,9 @@ static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_
 
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
-
-    DrvPlatformLyrTouchDeviceResetHw();
-
-    DbBusEnterSerialDebugMode();
-    DbBusStopMCU();
-    DbBusIICUseBus();
-    DbBusIICReshape();
-    mdelay(100);
 
     // erase main
     _DrvFwCtrlEraseEmemC33(EMEM_MAIN);
@@ -2888,7 +2100,7 @@ static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_
     DbBusStopMCU();
     DbBusIICUseBus();
     DbBusIICReshape();
-    mdelay(100);
+    mdelay(300);
 
     /////////////////////////
     // Program
@@ -3009,7 +2221,7 @@ static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_
 #if defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
         for (j = 0; j < 8; j ++)
         {
-            IicWriteData(SLAVE_I2C_ID_DWI2C, &szFwData[i][j*128], 128);
+            IicWriteData(SLAVE_I2C_ID_DWI2C, &szFwData[i][j*1024], 1024);
         }
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM)
         IicWriteData(SLAVE_I2C_ID_DWI2C, szFwData[i], 1024);
@@ -3061,12 +2273,13 @@ static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_
 
     g_FwDataCount = 0; // Reset g_FwDataCount to 0 after update firmware
 
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
     DrvPlatformLyrTouchDeviceResetHw();
     
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
     if ((eEmemType == EMEM_ALL) || (eEmemType == EMEM_MAIN))
     {
@@ -3093,7 +2306,7 @@ static s32 _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(u8 szFwData[][1024], EmemType_
     return 0;
 } 
 
-void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void) 
+void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void) // For MSG21XXA
 {
     u32 nCrcMainA, nCrcMainB;
     u32 i;
@@ -3107,11 +2320,13 @@ void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void)
 
     DrvPlatformLyrDisableFingerTouchReport();
 
+    DrvFwCtrlGetCustomerFirmwareVersion(&nMajor, &nMinor, &pVersion);
+
     nCrcMainA = _DrvFwCtrlMsg21xxaCalculateMainCrcFromEFlash();
     nCrcMainB = _DrvFwCtrlMsg21xxaRetrieveMainCrcFromMainBlock();
 
-    _gUpdateFirmwareBySwIdWorkQueue = create_singlethread_workqueue("update_firmware_by_sw_id");
-    INIT_WORK(&_gUpdateFirmwareBySwIdWork, _DrvFwCtrlUpdateFirmwareBySwIdDoWork);
+  //  _gUpdateFirmwareBySwIdWorkQueue = create_singlethread_workqueue("update_firmware_by_sw_id");
+  //  INIT_WORK(&_gUpdateFirmwareBySwIdWork, _DrvFwCtrlUpdateFirmwareBySwIdDoWork);
 
     DBG("nCrcMainA=0x%x, nCrcMainB=0x%x\n", nCrcMainA, nCrcMainB);
                
@@ -3137,21 +2352,21 @@ void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void)
         if (eSwId == MSG21XXA_SW_ID_XXXX)
         {
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
-            nUpdateBinMajor = msg21xxa_xxxx_update_bin[31][0x34F]<<8 | msg21xxa_xxxx_update_bin[31][0x34E];
-            nUpdateBinMinor = msg21xxa_xxxx_update_bin[31][0x351]<<8 | msg21xxa_xxxx_update_bin[31][0x350];
+            nUpdateBinMajor = msg2xxx_xxxx_update_bin[31][0x34F]<<8 | msg2xxx_xxxx_update_bin[31][0x34E];
+            nUpdateBinMinor = msg2xxx_xxxx_update_bin[31][0x351]<<8 | msg2xxx_xxxx_update_bin[31][0x350];
 #else // By one dimensional array
-            nUpdateBinMajor = msg21xxa_xxxx_update_bin[0x7F4F]<<8 | msg21xxa_xxxx_update_bin[0x7F4E];
-            nUpdateBinMinor = msg21xxa_xxxx_update_bin[0x7F51]<<8 | msg21xxa_xxxx_update_bin[0x7F50];
+            nUpdateBinMajor = msg2xxx_xxxx_update_bin[0x7F4F]<<8 | msg2xxx_xxxx_update_bin[0x7F4E];
+            nUpdateBinMinor = msg2xxx_xxxx_update_bin[0x7F51]<<8 | msg2xxx_xxxx_update_bin[0x7F50];
 #endif
         }
         else if (eSwId == MSG21XXA_SW_ID_YYYY)
         {
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
-            nUpdateBinMajor = msg21xxa_yyyy_update_bin[31][0x34F]<<8 | msg21xxa_yyyy_update_bin[31][0x34E];
-            nUpdateBinMinor = msg21xxa_yyyy_update_bin[31][0x351]<<8 | msg21xxa_yyyy_update_bin[31][0x350];
+            nUpdateBinMajor = msg2xxx_yyyy_update_bin[31][0x34F]<<8 | msg2xxx_yyyy_update_bin[31][0x34E];
+            nUpdateBinMinor = msg2xxx_yyyy_update_bin[31][0x351]<<8 | msg2xxx_yyyy_update_bin[31][0x350];
 #else // By one dimensional array
-            nUpdateBinMajor = msg21xxa_yyyy_update_bin[0x7F4F]<<8 | msg21xxa_yyyy_update_bin[0x7F4E];
-            nUpdateBinMinor = msg21xxa_yyyy_update_bin[0x7F51]<<8 | msg21xxa_yyyy_update_bin[0x7F50];
+            nUpdateBinMajor = msg2xxx_yyyy_update_bin[0x7F4F]<<8 | msg2xxx_yyyy_update_bin[0x7F4E];
+            nUpdateBinMinor = msg2xxx_yyyy_update_bin[0x7F51]<<8 | msg2xxx_yyyy_update_bin[0x7F50];
 #endif
         }
         else //eSwId == MSG21XXA_SW_ID_UNDEFINED
@@ -3162,48 +2377,40 @@ void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void)
             nUpdateBinMajor = 0;
             nUpdateBinMinor = 0;    		        						
         }
-
-        DrvFwCtrlGetCustomerFirmwareVersion(&nMajor, &nMinor, &pVersion);
     		        
         DBG("eSwId=0x%x, nMajor=%d, nMinor=%d, nUpdateBinMajor=%d, nUpdateBinMinor=%d\n", eSwId, nMajor, nMinor, nUpdateBinMajor, nUpdateBinMinor);
 
         if ((nUpdateBinMinor > nMinor && nIsCompareVersion == 1) || (nIsCompareVersion == 0))
         {
-            if (eSwId == MSG21XXA_SW_ID_XXXX)
-            {
-                for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
-                {
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
-                    _DrvFwCtrlStoreFirmwareData(msg21xxa_xxxx_update_bin[i], 1024);
-#else // By one dimensional array
-                    _DrvFwCtrlStoreFirmwareData(&(msg21xxa_xxxx_update_bin[i*1024]), 1024);
-#endif
-                }
-            }
-            else if (eSwId == MSG21XXA_SW_ID_YYYY)
-            {
-                for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
-                {
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
-                    _DrvFwCtrlStoreFirmwareData(msg21xxa_yyyy_update_bin[i], 1024);
-#else // By one dimensional array
-                    _DrvFwCtrlStoreFirmwareData(&(msg21xxa_yyyy_update_bin[i*1024]), 1024);
-#endif
-                }
-            }
-            else
-            {
-                DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
-
-                eSwId = MSG21XXA_SW_ID_UNDEFINED;
-            }
-
             if (eSwId < MSG21XXA_SW_ID_UNDEFINED && eSwId != 0xFFFF)
             {
+                if (eSwId == MSG21XXA_SW_ID_XXXX)
+                {
+                    for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
+                    {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                        _DrvFwCtrlStoreFirmwareData(msg2xxx_xxxx_update_bin[i], 1024);
+#else // By one dimensional array
+                        _DrvFwCtrlStoreFirmwareData(&(msg2xxx_xxxx_update_bin[i*1024]), 1024);
+#endif
+                    }
+                }
+                else if (eSwId == MSG21XXA_SW_ID_YYYY)
+                {
+                    for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
+                    {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                        _DrvFwCtrlStoreFirmwareData(msg2xxx_yyyy_update_bin[i], 1024);
+#else // By one dimensional array
+                        _DrvFwCtrlStoreFirmwareData(&(msg2xxx_yyyy_update_bin[i*1024]), 1024);
+#endif
+                    }
+                }
+
                 g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
 
                 _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
-                queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+            //    queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
                 return;
             }
             else
@@ -3225,41 +2432,35 @@ void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void)
         DBG("Check firmware integrity failed\n");
         DBG("eSwId=0x%x\n", eSwId);
 
-        if (eSwId == MSG21XXA_SW_ID_XXXX)
-        {
-            for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
-            {
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
-                _DrvFwCtrlStoreFirmwareData(msg21xxa_xxxx_update_bin[i], 1024);
-#else // By one dimensional array
-                _DrvFwCtrlStoreFirmwareData(&(msg21xxa_xxxx_update_bin[i*1024]), 1024);
-#endif
-            }
-        }
-        else if (eSwId == MSG21XXA_SW_ID_YYYY)
-        {
-            for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
-            {
-#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
-                _DrvFwCtrlStoreFirmwareData(msg21xxa_yyyy_update_bin[i], 1024);
-#else // By one dimensional array
-                _DrvFwCtrlStoreFirmwareData(&(msg21xxa_yyyy_update_bin[i*1024]), 1024);
-#endif
-            }
-        }
-        else
-        {
-            DBG("eSwId = 0x%x is an undefined SW ID.\n", eSwId);
-
-            eSwId = MSG21XXA_SW_ID_UNDEFINED;
-        }
-
         if (eSwId < MSG21XXA_SW_ID_UNDEFINED && eSwId != 0xFFFF)
         {
+            if (eSwId == MSG21XXA_SW_ID_XXXX)
+            {
+                for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
+                {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                    _DrvFwCtrlStoreFirmwareData(msg2xxx_xxxx_update_bin[i], 1024);
+#else // By one dimensional array
+                    _DrvFwCtrlStoreFirmwareData(&(msg2xxx_xxxx_update_bin[i*1024]), 1024);
+#endif
+                }
+            }
+            else if (eSwId == MSG21XXA_SW_ID_YYYY)
+            {
+                for (i = 0; i < MSG21XXA_FIRMWARE_MAIN_BLOCK_SIZE; i ++)
+                {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                    _DrvFwCtrlStoreFirmwareData(msg2xxx_yyyy_update_bin[i], 1024);
+#else // By one dimensional array
+                    _DrvFwCtrlStoreFirmwareData(&(msg2xxx_yyyy_update_bin[i*1024]), 1024);
+#endif
+                }
+            }
+
             g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
 
             _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
-            queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+       //     queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
             return;
         }
         else
@@ -3273,31 +2474,23 @@ void _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId(void)
     
     DrvPlatformLyrEnableFingerTouchReport();
 }
-#endif
-//-------------------------End of SW ID for MSG21XXA----------------------------//
 
-static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork)
+//-------------------------End of SW ID for MSG21XXA----------------------------//
+static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(void)
+//static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork)
 {
     s32 nRetVal = 0;
     
     DBG("*** %s() _gUpdateRetryCount = %d ***\n", __func__, _gUpdateRetryCount);
-
+    DrvPlatformLyrDisableFingerTouchReport();
+    program_over = 0;
     if (g_ChipType == CHIP_TYPE_MSG21XXA)   
     {
-        //nRetVal = _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(g_FwData, EMEM_MAIN);
+        nRetVal = _DrvFwCtrlMsg21xxaUpdateFirmwareBySwId(g_FwData, EMEM_MAIN);
     }
     else if (g_ChipType == CHIP_TYPE_MSG22XX)    
     {
-        _DrvFwCtrlMsg22xxGetTpVendorCode(_gTpVendorCode);
-        
-        if (_gTpVendorCode[0] == 'C' && _gTpVendorCode[1] == 'N' && _gTpVendorCode[2] == 'T') // for specific TP vendor which store some important information in info block, only update firmware for main block, do not update firmware for info block.
-        {
-            nRetVal = _DrvFwCtrlMsg22xxUpdateFirmware(g_FwData, EMEM_MAIN);
-        }
-        else
-        {
-            nRetVal = _DrvFwCtrlMsg22xxUpdateFirmwareBySwId();
-        }
+        nRetVal = _DrvFwCtrlMsg22xxUpdateFirmwareBySwId();
     }
     else
     {
@@ -3308,6 +2501,7 @@ static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork)
         DrvPlatformLyrEnableFingerTouchReport();
 
         nRetVal = -1;
+	 program_over = 1;
         return;
     }
     
@@ -3318,13 +2512,13 @@ static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork)
         DBG("update firmware by sw id success\n");
 
         DrvPlatformLyrTouchDeviceResetHw();
-
+	 program_over = 1;
         DrvPlatformLyrEnableFingerTouchReport();
 
         if (g_ChipType == CHIP_TYPE_MSG22XX)    
         {
             _gIsUpdateInfoBlockFirst = 0;
-            g_IsUpdateFirmware = 0x00;
+            _gIsUpdateFirmware = 0x00;
         }
     }
     else //nRetVal == -1
@@ -3333,20 +2527,23 @@ static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork)
         if (_gUpdateRetryCount > 0)
         {
             DBG("_gUpdateRetryCount = %d\n", _gUpdateRetryCount);
-            queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+            DrvPlatformLyrTouchDeviceResetHw();
+	     program_over = 1;
+            DrvPlatformLyrEnableFingerTouchReport();
+            //queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
         }
         else
         {
             DBG("update firmware by sw id failed\n");
 
             DrvPlatformLyrTouchDeviceResetHw();
-
+	     program_over = 1;
             DrvPlatformLyrEnableFingerTouchReport();
 
             if (g_ChipType == CHIP_TYPE_MSG22XX)    
             {
                 _gIsUpdateInfoBlockFirst = 0;
-                g_IsUpdateFirmware = 0x00;
+                _gIsUpdateFirmware = 0x00;
             }
         }
     }
@@ -3355,7 +2552,7 @@ static void _DrvFwCtrlUpdateFirmwareBySwIdDoWork(struct work_struct *pWork)
 #endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
 //------------------------------------------------------------------------------//
-#if 0	//
+#ifndef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 static void _DrvFwCtrlReadInfoC33(void)
 {
     u8 szDbBusTxData[5] = {0};
@@ -3440,7 +2637,7 @@ static s32 _DrvFwCtrlUpdateFirmwareC32(u8 szFwData[][1024], EmemType_e eEmemType
 
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
@@ -3456,7 +2653,7 @@ static s32 _DrvFwCtrlUpdateFirmwareC32(u8 szFwData[][1024], EmemType_e eEmemType
     DbBusStopMCU();
     DbBusIICUseBus();
     DbBusIICReshape();
-    mdelay(100);
+    mdelay(300);
 
     // Reset watch dog
     RegSetLByteValue(0x3C60, 0x55);
@@ -3570,12 +2767,13 @@ static s32 _DrvFwCtrlUpdateFirmwareC32(u8 szFwData[][1024], EmemType_e eEmemType
 
     g_FwDataCount = 0; // Reset g_FwDataCount to 0 after update firmware
 
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
     DrvPlatformLyrTouchDeviceResetHw();
 
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
     if ((nCrcMainTp != nCrcMain) || (nCrcInfoTp != nCrcInfo))
     {
@@ -3605,7 +2803,7 @@ static s32 _DrvFwCtrlUpdateFirmwareC33(u8 szFwData[][1024], EmemType_e eEmemType
 
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
@@ -3663,7 +2861,7 @@ static s32 _DrvFwCtrlUpdateFirmwareC33(u8 szFwData[][1024], EmemType_e eEmemType
     DbBusStopMCU();
     DbBusIICUseBus();
     DbBusIICReshape();
-    mdelay(100);
+    mdelay(300);
 
     /////////////////////////
     // Program
@@ -3815,12 +3013,13 @@ static s32 _DrvFwCtrlUpdateFirmwareC33(u8 szFwData[][1024], EmemType_e eEmemType
 
     g_FwDataCount = 0; // Reset g_FwDataCount to 0 after update firmware
 
-    DbBusIICNotUseBus();
-    DbBusNotStopMCU();
-    DbBusExitSerialDebugMode();
-
     DrvPlatformLyrTouchDeviceResetHw();
 
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
     if ((eEmemType == EMEM_ALL) || (eEmemType == EMEM_MAIN))
     {
@@ -3837,28 +3036,25 @@ static s32 _DrvFwCtrlUpdateFirmwareC33(u8 szFwData[][1024], EmemType_e eEmemType
     return 0;
 }
 #endif
-
 static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmemType)
 {
     u32 i, index;
-    u32 nCrcMain = 0, nCrcMainTp = 0;
-    u32 nCrcInfo = 0, nCrcInfoTp = 0;
+    u32 nCrcMain, nCrcMainTp;
+    u32 nCrcInfo, nCrcInfoTp;
     u32 nRemainSize, nBlockSize, nSize;
-    u32 nTimeOut = 0;
     u16 nRegData = 0;
-#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
     u8 szDbBusTxData[128] = {0};
+#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
     u32 nSizePerWrite = 125;
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM)
-    u8 szDbBusTxData[1024] = {0};
     u32 nSizePerWrite = 1021;
 #endif
 
     DBG("*** %s() ***\n", __func__);
-
+    memset(szDbBusTxData, 0, sizeof(szDbBusTxData));
 #ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 #ifdef CONFIG_ENABLE_DMA_IIC
-    DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
 #endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
 
@@ -3897,27 +3093,11 @@ static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmem
 
         DBG("Wait erase done flag\n");
 
-        while (1) // Wait erase done flag
+        do // Wait erase done flag
         {
             nRegData = RegGet16BitValue(0x1610); // Memory status
-            nRegData = nRegData & BIT1;
-            
-            DBG("Wait erase done flag nRegData = 0x%x\n", nRegData);
-
-            if (nRegData == BIT1)
-            {
-                break;		
-            }
-
             mdelay(50);
-
-            if ((nTimeOut ++) > 30)
-            {
-                DBG("Erase all block failed. Timeout.\n");
-
-                goto UpdateEnd;
-            }
-        }
+        } while((nRegData & BIT1) != BIT1);
     }
     else if (eEmemType == EMEM_MAIN) // 48KB (32+8+8)
     {
@@ -3947,29 +3127,11 @@ static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmem
 
             DBG("Wait erase done flag\n");
 
-            nRegData = 0;
-            nTimeOut = 0;
-
-            while (1) // Wait erase done flag
+            do // Wait erase done flag
             {
                 nRegData = RegGet16BitValue(0x1610); // Memory status
-                nRegData = nRegData & BIT1;
-            
-                DBG("Wait erase done flag nRegData = 0x%x\n", nRegData);
-
-                if (nRegData == BIT1)
-                {
-                    break;		
-                }
                 mdelay(50);
-
-                if ((nTimeOut ++) > 30)
-                {
-                    DBG("Erase main block failed. Timeout.\n");
-
-                    goto UpdateEnd;
-                }
-            }
+            } while((nRegData & BIT1) != BIT1);
         }   
     }
     else if (eEmemType == EMEM_INFO) // 512Byte
@@ -3987,26 +3149,11 @@ static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmem
 
         DBG("Wait erase done flag\n");
 
-        while (1) // Wait erase done flag
+        do // Wait erase done flag
         {
             nRegData = RegGet16BitValue(0x1610); // Memory status
-            nRegData = nRegData & BIT1;
-            
-            DBG("Wait erase done flag nRegData = 0x%x\n", nRegData);
-
-            if (nRegData == BIT1)
-            {
-                break;		
-            }
             mdelay(50);
-
-            if ((nTimeOut ++) > 30)
-            {
-                DBG("Erase info block failed. Timeout.\n");
-
-                goto UpdateEnd;
-            }
-        }
+        } while((nRegData & BIT1) != BIT1);
     }
     
     DBG("Erase end\n");
@@ -4082,31 +3229,15 @@ static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmem
 		
         DBG("Wait main block write done flag\n");
 		
-        nRegData = 0;
-        nTimeOut = 0;
-
-        while (1) // Wait write done flag
+        // Polling 0x1610 is 0x0002
+        do
         {
-            // Polling 0x1610 is 0x0002
-            nRegData = RegGet16BitValue(0x1610); // Memory status
+            nRegData = RegGet16BitValue(0x1610);
             nRegData = nRegData & BIT1;
-    
-            DBG("Wait write done flag nRegData = 0x%x\n", nRegData);
-
-            if (nRegData == BIT1)
-            {
-                break;		
-            }
             mdelay(10);
-
-            if ((nTimeOut ++) > 30)
-            {
-                DBG("Write failed. Timeout.\n");
-
-                goto UpdateEnd;
-            }
-        }
-    
+		
+        } while (nRegData != BIT1); // Wait write done flag
+		
         DBG("Program main block end\n");
     }
     
@@ -4174,35 +3305,17 @@ static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmem
 
         DBG("Wait info block write done flag\n");
 
-        nRegData = 0;
-        nTimeOut = 0;
-
-        while (1) // Wait write done flag
+        // Polling 0x1610 is 0x0002
+        do
         {
-            // Polling 0x1610 is 0x0002
-            nRegData = RegGet16BitValue(0x1610); // Memory status
+            nRegData = RegGet16BitValue(0x1610);
             nRegData = nRegData & BIT1;
-    
-            DBG("Wait write done flag nRegData = 0x%x\n", nRegData);
-
-            if (nRegData == BIT1)
-            {
-                break;		
-            }
             mdelay(10);
 
-            if ((nTimeOut ++) > 30)
-            {
-                DBG("Write failed. Timeout.\n");
-
-                goto UpdateEnd;
-            }
-        }
+        } while (nRegData != BIT1); // Wait write done flag
 
         DBG("Program info block end\n");
     }
-    
-    UpdateEnd:
 
     if (eEmemType == EMEM_ALL || eEmemType == EMEM_MAIN)
     {
@@ -4243,6 +3356,12 @@ static s32 _DrvFwCtrlMsg22xxUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmem
 
     DrvPlatformLyrTouchDeviceResetHw();
 
+#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
+#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
+
     if (eEmemType == EMEM_ALL)
     {
         if ((nCrcMainTp != nCrcMain) || (nCrcInfoTp != nCrcInfo))
@@ -4280,11 +3399,10 @@ static s32 _DrvFwCtrlUpdateFirmwareCash(u8 szFwData[][1024])
 {
     DBG("*** %s() ***\n", __func__);
 
-    DBG("g_ChipType = 0x%x\n", g_ChipType);
+    DBG("chip type = 0x%x\n", g_ChipType);
     
     if (g_ChipType == CHIP_TYPE_MSG21XXA) // (0x02)
     {
-	#if 0
 //        u16 nChipType;
         u8 nChipVersion = 0;
 
@@ -4295,7 +3413,7 @@ static s32 _DrvFwCtrlUpdateFirmwareCash(u8 szFwData[][1024])
         DbBusStopMCU();
         DbBusIICUseBus();
         DbBusIICReshape();
-        mdelay(100);
+        mdelay(300);
     
         // Stop MCU
         RegSetLByteValue(0x0FE6, 0x01);
@@ -4314,7 +3432,7 @@ static s32 _DrvFwCtrlUpdateFirmwareCash(u8 szFwData[][1024])
         nChipVersion = RegGet16BitValue(0x3CEA) & 0xFF;
 
         DBG("chip version = 0x%x\n", nChipVersion);
-        
+
         if (nChipVersion == 3)
         {
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
@@ -4331,21 +3449,19 @@ static s32 _DrvFwCtrlUpdateFirmwareCash(u8 szFwData[][1024])
             return _DrvFwCtrlUpdateFirmwareC32(szFwData, EMEM_ALL);
 #endif        
         }
-	#endif
-	return -1;
     }
     else if (g_ChipType == CHIP_TYPE_MSG22XX) // (0x7A)
     {
-        _DrvFwCtrlMsg22xxGetTpVendorCode(_gTpVendorCode);
+//        _DrvFwCtrlMsg22xxGetTpVendorCode(_gTpVendorCode);
         
-        if (_gTpVendorCode[0] == 'C' && _gTpVendorCode[1] == 'N' && _gTpVendorCode[2] == 'T') // for specific TP vendor which store some important information in info block, only update firmware for main block, do not update firmware for info block.
-        {
-            return _DrvFwCtrlMsg22xxUpdateFirmware(szFwData, EMEM_MAIN);
-        }
-        else
-        {
+//        if (_gTpVendorCode[0] == 'C' && _gTpVendorCode[1] == 'N' && _gTpVendorCode[2] == 'T') // for specific TP vendor which store some important information in info block, only update firmware for main block, do not update firmware for info block.
+//        {
+//            return _DrvFwCtrlMsg22xxUpdateFirmware(szFwData, EMEM_MAIN);
+//        }
+//        else
+//        {
             return _DrvFwCtrlMsg22xxUpdateFirmware(szFwData, EMEM_ALL);
-        }
+//        }
     }
     else // CHIP_TYPE_MSG21XX (0x01)
     {
@@ -4356,207 +3472,24 @@ static s32 _DrvFwCtrlUpdateFirmwareCash(u8 szFwData[][1024])
     }
 }
 
-static s32 _DrvFwCtrlUpdateFirmwareBySdCard(const char *pFilePath)
-{
-    s32 nRetVal = 0;
-    struct file *pfile = NULL;
-    struct inode *inode;
-    s32 fsize = 0;
-    u8 *pbt_buf = NULL;
-    mm_segment_t old_fs;
-    loff_t pos;
-    u16 eSwId = 0x0000;
-    u16 eVendorId = 0x0000;
-    
-    DBG("*** %s() ***\n", __func__);
-
-    pfile = filp_open(pFilePath, O_RDONLY, 0);
-    if (IS_ERR(pfile))
-    {
-        DBG("Error occured while opening file %s.\n", pFilePath);
-        return -1;
-    }
-
-    inode = pfile->f_dentry->d_inode;
-    fsize = inode->i_size;
-
-    DBG("fsize = %d\n", fsize);
-
-    if (fsize <= 0)
-    {
-        filp_close(pfile, NULL);
-        return -1;
-    }
-
-    // read firmware
-    pbt_buf = kmalloc(fsize, GFP_KERNEL);
-
-    old_fs = get_fs();
-    set_fs(KERNEL_DS);
-  
-    pos = 0;
-    vfs_read(pfile, pbt_buf, fsize, &pos);
-  
-    filp_close(pfile, NULL);
-    set_fs(old_fs);
-
-    _DrvFwCtrlStoreFirmwareData(pbt_buf, fsize);
-
-    kfree(pbt_buf);
-
-    DrvPlatformLyrDisableFingerTouchReport();
-    
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)    
-    {
-        eVendorId = g_FwData[31][0x34F] <<8 | g_FwData[31][0x34E];
-        eSwId = _DrvFwCtrlMsg21xxaGetSwId(EMEM_MAIN);
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)    
-    {
-        eVendorId = g_FwData[47][1013] <<8 | g_FwData[47][1012];
-        eSwId = _DrvFwCtrlMsg22xxGetSwId(EMEM_MAIN);
-    }
-
-    DBG("eVendorId = 0x%x, eSwId = 0x%x\n", eVendorId, eSwId);
-    DBG("IS_FORCE_TO_UPDATE_FIRMWARE_ENABLED = %d\n", IS_FORCE_TO_UPDATE_FIRMWARE_ENABLED);
-    		
-    if ((eSwId == eVendorId) || (IS_FORCE_TO_UPDATE_FIRMWARE_ENABLED))
-    {
-        if ((g_ChipType == CHIP_TYPE_MSG21XXA && fsize == 33792/* 33KB */) || (g_ChipType == CHIP_TYPE_MSG22XX && fsize == 49664/* 48.5KB */))
-        {
-    	      nRetVal = _DrvFwCtrlUpdateFirmwareCash(g_FwData);
-        }
-        else
-       	{
-            DBG("The file size of the update firmware bin file is not supported, fsize = %d\n", fsize);
-            nRetVal = -1;
-        }
-    }
-    else 
-    {
-        DBG("The vendor id of the update firmware bin file is different from the vendor id on e-flash.\n");
-        nRetVal = -1;
-    }
-
-    g_FwDataCount = 0; // Reset g_FwDataCount to 0 after update firmware
-    
-    DrvPlatformLyrEnableFingerTouchReport();
-
-    return nRetVal;
-}
-
 /*=============================================================*/
 // GLOBAL FUNCTION DEFINITION
 /*=============================================================*/
 
-void DrvFwCtrlVariableInitialize(void)
-{
-    DBG("*** %s() ***\n", __func__);
-
-    if (g_ChipType == CHIP_TYPE_MSG21XXA)
-    {
-//        FIRMWARE_MODE_UNKNOWN_MODE = MSG21XXA_FIRMWARE_MODE_UNKNOWN_MODE;
-        FIRMWARE_MODE_DEMO_MODE = MSG21XXA_FIRMWARE_MODE_DEMO_MODE;
-        FIRMWARE_MODE_DEBUG_MODE = MSG21XXA_FIRMWARE_MODE_DEBUG_MODE;
-        FIRMWARE_MODE_RAW_DATA_MODE = MSG21XXA_FIRMWARE_MODE_RAW_DATA_MODE;
-
-        g_FirmwareMode = FIRMWARE_MODE_DEMO_MODE;
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-//        FIRMWARE_MODE_UNKNOWN_MODE = MSG22XX_FIRMWARE_MODE_UNKNOWN_MODE;
-        FIRMWARE_MODE_DEMO_MODE = MSG22XX_FIRMWARE_MODE_DEMO_MODE;
-        FIRMWARE_MODE_DEBUG_MODE = MSG22XX_FIRMWARE_MODE_DEBUG_MODE;
-        FIRMWARE_MODE_RAW_DATA_MODE = MSG22XX_FIRMWARE_MODE_RAW_DATA_MODE;
-
-        g_FirmwareMode = FIRMWARE_MODE_DEMO_MODE;
-    }	
-}	
-
-void DrvFwCtrlOptimizeCurrentConsumption(void)
-{
-    u32 i;
-    u8 szDbBusTxData[27] = {0};
-
-    DBG("g_ChipType = 0x%x\n", g_ChipType);
-    
-#ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-    if (g_GestureWakeupFlag == 1)
-    {
-        return;
-    }
-#endif //CONFIG_ENABLE_GESTURE_WAKEUP
-
-    if (g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        DBG("*** %s() ***\n", __func__);
-
-#ifdef CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
-#ifdef CONFIG_ENABLE_DMA_IIC
-        DmaReset();
-#endif //CONFIG_ENABLE_DMA_IIC
-#endif //CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM
-
-        DrvPlatformLyrTouchDeviceResetHw(); 
-
-        DbBusEnterSerialDebugMode();
-        DbBusStopMCU();
-        DbBusIICUseBus();
-        DbBusIICReshape();
-
-        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
-
-        // Enable burst mode
-        RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
-
-        szDbBusTxData[0] = 0x10;
-        szDbBusTxData[1] = 0x11;
-        szDbBusTxData[2] = 0xA0; //bank:0x11, addr:h0050
-    
-        for (i = 0; i < 24; i ++)
-        {
-            szDbBusTxData[i+3] = 0x11;
-        }
-		
-        IicWriteData(SLAVE_I2C_ID_DBBUS, &szDbBusTxData[0], 3+24);  // Write 0x11 for reg 0x1150~0x115B
-
-        szDbBusTxData[0] = 0x10;
-        szDbBusTxData[1] = 0x11;
-        szDbBusTxData[2] = 0xB8; //bank:0x11, addr:h005C
-    
-        for (i = 0; i < 6; i ++)
-        {
-            szDbBusTxData[i+3] = 0xFF;
-        }
-		
-        IicWriteData(SLAVE_I2C_ID_DBBUS, &szDbBusTxData[0], 3+6);   // Write 0xFF for reg 0x115C~0x115E 
-    
-        // Clear burst mode
-        RegSet16BitValue(0x160C, RegGet16BitValue(0x160C) & (~0x01)); 
-    
-        DbBusIICNotUseBus();
-        DbBusNotStopMCU();
-        DbBusExitSerialDebugMode();
-    }
-}
-
 u8 DrvFwCtrlGetChipType(void)
 {
-    s32 rc =0;
     u8 nChipType = 0;
 
     DBG("*** %s() ***\n", __func__);
 
+    DrvPlatformLyrTouchDeviceResetHw();
+
     // Erase TP Flash first
-    rc = DbBusEnterSerialDebugMode();
-    if (rc < 0)
-    {
-        DBG("*** DbBusEnterSerialDebugMode() failed, rc = %d ***\n", rc);
-        return nChipType;
-    }
+    DbBusEnterSerialDebugMode();
     DbBusStopMCU();
     DbBusIICUseBus();
     DbBusIICReshape();
+    mdelay(300);
 
     // Stop MCU
     RegSetLByteValue(0x0FE6, 0x01);
@@ -4574,18 +3507,18 @@ u8 DrvFwCtrlGetChipType(void)
     if (nChipType != CHIP_TYPE_MSG21XX &&   // (0x01) 
         nChipType != CHIP_TYPE_MSG21XXA &&  // (0x02) 
         nChipType != CHIP_TYPE_MSG26XXM &&  // (0x03) 
-        nChipType != CHIP_TYPE_MSG22XX &&   // (0x7A) 
-        nChipType != CHIP_TYPE_MSG28XX)     // (0x85) 
+        nChipType != CHIP_TYPE_MSG22XX)     // (0x7A) 
     {
         nChipType = 0;
     }
 
     DBG("*** Chip Type = 0x%x ***\n", nChipType);
-
     DbBusIICNotUseBus();
     DbBusNotStopMCU();
     DbBusExitSerialDebugMode();
-    
+
+    DrvPlatformLyrTouchDeviceResetHw();
+	
     return nChipType;
 }
 
@@ -4615,8 +3548,6 @@ void DrvFwCtrlGetCustomerFirmwareVersion(u16 *pMajor, u16 *pMinor, u8 **ppVersio
         }
 
         mutex_lock(&g_Mutex);
-
-        DrvPlatformLyrTouchDeviceResetHw();
 
         IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 3);
         IicReadData(SLAVE_I2C_ID_DWI2C, &szDbBusRxData[0], 4);
@@ -4649,11 +3580,17 @@ void DrvFwCtrlGetCustomerFirmwareVersion(u16 *pMajor, u16 *pMinor, u8 **ppVersio
         // RIU password
         RegSet16BitValue(0x161A, 0xABBA); 
 
+        // Clear pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
+
         RegSet16BitValue(0x1600, 0xBFF4); // Set start address for customer firmware version on main block
     
         // Enable burst mode
 //        RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
 
+        // Set pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
+    
         RegSetLByteValue(0x160E, 0x01); 
 
         nRegData1 = RegGet16BitValue(0x1604);
@@ -4675,6 +3612,7 @@ void DrvFwCtrlGetCustomerFirmwareVersion(u16 *pMajor, u16 *pMinor, u8 **ppVersio
         DbBusExitSerialDebugMode();
 
         DrvPlatformLyrTouchDeviceResetHw();
+        mdelay(100);
 
         mutex_unlock(&g_Mutex);
     }
@@ -4719,11 +3657,17 @@ void DrvFwCtrlGetPlatformFirmwareVersion(u8 **ppVersion)
         // RIU password
         RegSet16BitValue(0x161A, 0xABBA); 
 
+        // Clear pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x80));
+
         RegSet16BitValue(0x1600, 0xC1F2); // Set start address for platform firmware version on info block(Actually, start reading from 0xC1F0)
     
         // Enable burst mode
         RegSet16BitValue(0x160C, (RegGet16BitValue(0x160C) | 0x01));
 
+        // Set pce
+        RegSet16BitValue(0x1618, (RegGet16BitValue(0x1618) | 0x40)); 
+    
         for (i = 0; i < 3; i ++)
         {
             RegSetLByteValue(0x160E, 0x01); 
@@ -4775,6 +3719,7 @@ void DrvFwCtrlGetPlatformFirmwareVersion(u8 **ppVersion)
     DbBusExitSerialDebugMode();
 
     DrvPlatformLyrTouchDeviceResetHw();
+    mdelay(100);
 
     mutex_unlock(&g_Mutex);
     
@@ -4788,24 +3733,6 @@ s32 DrvFwCtrlUpdateFirmware(u8 szFwData[][1024], EmemType_e eEmemType)
     return _DrvFwCtrlUpdateFirmwareCash(szFwData);
 }	
 
-s32 DrvFwCtrlUpdateFirmwareBySdCard(const char *pFilePath)
-{
-    s32 nRetVal = -1;
-    
-    DBG("*** %s() ***\n", __func__);
-
-    if (g_ChipType == CHIP_TYPE_MSG21XXA || g_ChipType == CHIP_TYPE_MSG22XX)    
-    {
-        nRetVal = _DrvFwCtrlUpdateFirmwareBySdCard(pFilePath);
-    }
-    else
-    {
-        DBG("This chip type (%d) does not support update firmware by sd card\n", g_ChipType);
-    }
-    
-    return nRetVal;
-}	
-
 void DrvFwCtrlHandleFingerTouch(void)
 {
     TouchInfo_t tInfo;
@@ -4814,121 +3741,79 @@ void DrvFwCtrlHandleFingerTouch(void)
     static u32 nLastKeyCode = 0;
     u8 *pPacket = NULL;
     u16 nReportPacketLength = 0;
-    s32 rc;
 
-//    DBG("*** %s() ***\n", __func__);  // add for debug
+//    DBG("*** %s() ***\n", __func__);
     
-    if (_gIsDisableFinagerTouch == 1)
-    {
-        DBG("Skip finger touch for handling get firmware info or change firmware mode\n");
-        return;
-    }
-    
-    mutex_lock(&g_Mutex);
-    DBG("*** %s() *** mutex_lock(&g_Mutex)\n", __func__);  // add for debug
+    memset(&tInfo, 0x0, sizeof(tInfo));
 
-    memset(&tInfo, 0x0, sizeof(TouchInfo_t));
-
-    if (IS_FIRMWARE_DATA_LOG_ENABLED)
-    { 	
-        if (g_FirmwareMode == FIRMWARE_MODE_DEMO_MODE)
-        {
-            DBG("FIRMWARE_MODE_DEMO_MODE\n");
-
-            nReportPacketLength = DEMO_MODE_PACKET_LENGTH;
-            pPacket = g_DemoModePacket;
-        }
-        else if (g_FirmwareMode == FIRMWARE_MODE_DEBUG_MODE)
-        {
-            DBG("FIRMWARE_MODE_DEBUG_MODE\n");
-
-            if (g_FirmwareInfo.nLogModePacketHeader != 0x62)
-            {
-                DBG("WRONG DEBUG MODE HEADER : 0x%x\n", g_FirmwareInfo.nLogModePacketHeader);
-                goto TouchHandleEnd;		
-            }
-
-            nReportPacketLength = g_FirmwareInfo.nLogModePacketLength;
-            pPacket = g_LogModePacket;
-        }
-        else if (g_FirmwareMode == FIRMWARE_MODE_RAW_DATA_MODE)
-        {
-            DBG("FIRMWARE_MODE_RAW_DATA_MODE\n");
-
-            if (g_FirmwareInfo.nLogModePacketHeader != 0x62)
-            {
-                DBG("WRONG RAW DATA MODE HEADER : 0x%x\n", g_FirmwareInfo.nLogModePacketHeader);
-                goto TouchHandleEnd;		
-            }
-
-            nReportPacketLength = g_FirmwareInfo.nLogModePacketLength;
-            pPacket = g_LogModePacket;
-        }
-        else
-        {
-            DBG("WRONG FIRMWARE MODE : 0x%x\n", g_FirmwareMode);
-            goto TouchHandleEnd;		
-        }
-    }
-    else
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+    if (g_FirmwareMode == FIRMWARE_MODE_DEMO_MODE)
     {
         DBG("FIRMWARE_MODE_DEMO_MODE\n");
 
         nReportPacketLength = DEMO_MODE_PACKET_LENGTH;
         pPacket = g_DemoModePacket;
-    } //IS_FIRMWARE_DATA_LOG_ENABLED
+    }
+    else if (g_FirmwareMode == FIRMWARE_MODE_DEBUG_MODE)
+    {
+        DBG("FIRMWARE_MODE_DEBUG_MODE\n");
+
+        if (g_FirmwareInfo.nLogModePacketHeader != 0x62)
+        {
+            DBG("WRONG DEBUG MODE HEADER : 0x%x\n", g_FirmwareInfo.nLogModePacketHeader);
+            return;
+        }
+
+        if (g_LogModePacket == NULL)
+        {
+            g_LogModePacket = kzalloc(sizeof(u8)*g_FirmwareInfo.nLogModePacketLength, GFP_KERNEL);
+        }
+        
+        nReportPacketLength = g_FirmwareInfo.nLogModePacketLength;
+        pPacket = g_LogModePacket;
+    }
+    else if (g_FirmwareMode == FIRMWARE_MODE_RAW_DATA_MODE)
+    {
+        DBG("FIRMWARE_MODE_RAW_DATA_MODE\n");
+
+        if (g_FirmwareInfo.nLogModePacketHeader != 0x62)
+        {
+            DBG("WRONG RAW DATA MODE HEADER : 0x%x\n", g_FirmwareInfo.nLogModePacketHeader);
+            return;
+        }
+
+        if (g_LogModePacket == NULL)
+        {
+            g_LogModePacket = kzalloc(sizeof(u8)*g_FirmwareInfo.nLogModePacketLength, GFP_KERNEL);
+        }
+        
+        nReportPacketLength = g_FirmwareInfo.nLogModePacketLength;
+        pPacket = g_LogModePacket;
+    }
+    else
+    {
+        DBG("WRONG FIRMWARE MODE : 0x%x\n", g_FirmwareMode);
+        return;
+    }
+#else
+//    DBG("FIRMWARE_MODE_DEMO_MODE\n");
+
+    nReportPacketLength = DEMO_MODE_PACKET_LENGTH;
+    pPacket = g_DemoModePacket;
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-    if (g_GestureDebugMode == 1 && g_GestureWakeupFlag == 1)
-    {
-        DBG("Set gesture debug mode packet length, g_ChipType=%d\n", g_ChipType);
-
-        if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-            nReportPacketLength = GESTURE_DEBUG_MODE_PACKET_LENGTH;
-            pPacket = _gGestureWakeupPacket;
-        }
-        else
-        {
-            DBG("This chip type does not support gesture debug mode.\n");
-            goto TouchHandleEnd;		
-        }
-    }
-    else if (g_GestureWakeupFlag == 1)
-    {
-        DBG("Set gesture wakeup packet length, g_ChipType=%d\n", g_ChipType);
-      
-        if (g_ChipType == CHIP_TYPE_MSG22XX)
-        {
-#ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
-            nReportPacketLength = GESTURE_WAKEUP_INFORMATION_PACKET_LENGTH;
-#else
-            nReportPacketLength = GESTURE_WAKEUP_PACKET_LENGTH;
-#endif //CONFIG_ENABLE_GESTURE_INFORMATION_MODE
-            pPacket = _gGestureWakeupPacket;
-        }
-        else if (g_ChipType == CHIP_TYPE_MSG21XXA)
-        {
-            nReportPacketLength = DEMO_MODE_PACKET_LENGTH;
-            pPacket = _gGestureWakeupPacket;
-        }
-        else
-        {
-            DBG("This chip type does not support gesture wakeup.\n");
-            goto TouchHandleEnd;
-        }
-	}
-
-#else
-
     if (g_GestureWakeupFlag == 1)
     {
         DBG("Set gesture wakeup packet length, g_ChipType=%d\n", g_ChipType);
         
         if (g_ChipType == CHIP_TYPE_MSG22XX)
         {
+            if (_gGestureWakeupPacket == NULL)
+            {
+                _gGestureWakeupPacket = kzalloc(sizeof(u8)*GESTURE_WAKEUP_PACKET_LENGTH, GFP_KERNEL);
+            }
+
 #ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
             nReportPacketLength = GESTURE_WAKEUP_INFORMATION_PACKET_LENGTH;
 #else
@@ -4939,24 +3824,27 @@ void DrvFwCtrlHandleFingerTouch(void)
         } 
         else if (g_ChipType == CHIP_TYPE_MSG21XXA)
         {
-            nReportPacketLength = DEMO_MODE_PACKET_LENGTH;
+            if (_gGestureWakeupPacket == NULL)
+            {
+                _gGestureWakeupPacket = kzalloc(sizeof(u8)*DEMO_MODE_PACKET_LENGTH, GFP_KERNEL);
+            }
+
+        		nReportPacketLength = DEMO_MODE_PACKET_LENGTH;
             pPacket = _gGestureWakeupPacket;
         }
         else
         {
             DBG("This chip type does not support gesture wakeup.\n");
-            goto TouchHandleEnd;		
+            return;
         }
     }
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
-
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP
 
 #if defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM)
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
     if (g_GestureWakeupFlag == 1)
     {
-        u32 i = 0
+        u32 i = 0, rc;
         
         while (i < 5)
         {
@@ -4971,52 +3859,30 @@ void DrvFwCtrlHandleFingerTouch(void)
             
             i ++;
         }
-        if (i == 5)
-        {
-            DBG("I2C read packet data failed, rc = %d\n", rc);
-            goto TouchHandleEnd;		
-        }
+    }
     else
     {
-        rc = IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
-        if (rc < 0)
-        {
-            DBG("I2C read packet data failed, rc = %d\n", rc);
-            goto TouchHandleEnd;		
-        }
+        IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
     }
 #else
-    rc = IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
-    if (rc < 0)
-    {
-        DBG("I2C read packet data failed, rc = %d\n", rc);
-        goto TouchHandleEnd;		
-    }
+    IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
 #endif //CONFIG_ENABLE_GESTURE_WAKEUP   
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM)
-    rc = IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
-    if (rc < 0)
-    {
-        DBG("I2C read packet data failed, rc = %d\n", rc);
-        goto TouchHandleEnd;		
-    }
+    IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
 #elif defined(CONFIG_TOUCH_DRIVER_RUN_ON_MTK_PLATFORM)
     if (nReportPacketLength > 8)
     {
 #ifdef CONFIG_ENABLE_DMA_IIC
-        DmaReset();
+    DmaAlloc();
 #endif //CONFIG_ENABLE_DMA_IIC
-        rc = IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
+    IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
+#ifdef CONFIG_ENABLE_DMA_IIC
+    DmaFree();
+#endif //CONFIG_ENABLE_DMA_IIC
     }
     else
     {
-        rc = IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
-    }
-
-    if (rc < 0)
-    {
-        DBG("I2C read packet data failed, rc = %d\n", rc);
-        goto TouchHandleEnd;		
+        IicReadData(SLAVE_I2C_ID_DWI2C, &pPacket[0], nReportPacketLength);
     }
 #endif
     
@@ -5027,20 +3893,16 @@ void DrvFwCtrlHandleFingerTouch(void)
         {
             if (nLastKeyCode != 0)
             {
-                DBG("key touch released\n");
+                //DBG("key touch released\n");
 
                 input_report_key(g_InputDevice, BTN_TOUCH, 0);
                 input_report_key(g_InputDevice, nLastKeyCode, 0);
-
-                input_sync(g_InputDevice);
                     
                 nLastKeyCode = 0; //clear key status..
             }
             else
             {
-                DrvPlatformLyrFingerTouchReleased(0, 0, 0);
-
-                input_sync(g_InputDevice);
+                DrvPlatformLyrFingerTouchReleased(0, 0);
             }
         }
         else //touch on screen
@@ -5048,15 +3910,16 @@ void DrvFwCtrlHandleFingerTouch(void)
             if (tInfo.nTouchKeyCode != 0)
             {
 #ifdef CONFIG_TP_HAVE_KEY
-                if (tInfo.nTouchKeyCode == 2) // TOUCH_KEY_HOME
+
+                if (tInfo.nTouchKeyCode == 2) // TOUCH_KEY_HOME  //modify by pangle at 20150228
                 {
                     nTouchKeyCode = g_TpVirtualKey[1];           
                 }
-                else if (tInfo.nTouchKeyCode == 4) // TOUCH_KEY_MENU
+                else if (tInfo.nTouchKeyCode == 1) // TOUCH_KEY_BACK  //modify by pangle at 20150228
                 {
                     nTouchKeyCode = g_TpVirtualKey[0];
                 }           
-                else if (tInfo.nTouchKeyCode == 1) // TOUCH_KEY_BACK
+                else if (tInfo.nTouchKeyCode == 4) // TOUCH_KEY_MENU  //modify by pangle at 20150228
                 {
                     nTouchKeyCode = g_TpVirtualKey[2];
                 }           
@@ -5074,251 +3937,126 @@ void DrvFwCtrlHandleFingerTouch(void)
 
                     input_report_key(g_InputDevice, BTN_TOUCH, 1);
                     input_report_key(g_InputDevice, nTouchKeyCode, 1);
-
-                    input_sync(g_InputDevice);
+//modify by pangle for report typed B at 20150417 begin
+#ifdef CHANGE_REPORT_TYPE_TO_B   // add by byron 
+					preTouchStatus=0;
+#endif
                 }
 #endif //CONFIG_TP_HAVE_KEY
             }
             else
             {
-                DBG("tInfo->nFingerNum = %d...............\n", tInfo.nFingerNum);
+                //DBG("tInfo->nFingerNum = %d...............\n", tInfo.nFingerNum);
                 
-                for (i = 0; i < tInfo.nFingerNum; i ++) 
+                for (i = 0; i < 2; i ++) 
                 {
-                    DrvPlatformLyrFingerTouchPressed(tInfo.tPoint[i].nX, tInfo.tPoint[i].nY, 0, 0);
+#ifdef CHANGE_REPORT_TYPE_TO_B   // add by byron 
+					
+                	input_mt_slot(g_InputDevice, i);
+					//printk("typed press[%d]=%d\n",i,press[i]);
+					if(tInfo.nFingerNum)
+					{
+						if(press[i])
+						{
+						//input_mt_report_slot_state(g_InputDevice, MT_TOOL_FINGER, 1);
+						
+							//printk(KERN_INFO"report:: u32X=%d,u32Y=%d,i=%d\n",tInfo.tPoint[i].nX,tInfo.tPoint[i].nY,i);
+				 			input_report_abs(g_InputDevice, ABS_MT_TRACKING_ID, i);
+							
+							DrvPlatformLyrFingerTouchPressed(tInfo.tPoint[i].nX, tInfo.tPoint[i].nY, 0, 0);						}
+						else
+						{
+							//input_mt_report_slot_state(g_InputDevice, MT_TOOL_FINGER, 0);
+							input_report_abs(g_InputDevice, ABS_MT_TRACKING_ID, -1);
+							
+						}
+					}
+#endif
+//modify by pangle for report typed B at 20150417 end
                 }
-
-                input_sync(g_InputDevice);
             }
         }
-
-#ifdef CONFIG_ENABLE_COUNT_REPORT_RATE
-        if (g_IsEnableReportRate == 1)
-        {
-            if (g_ValidTouchCount == 4294967296)
-            {
-                g_ValidTouchCount = 0; // Reset count if overflow
-                DBG("g_ValidTouchCount reset to 0\n");
-            } 	
-
-            g_ValidTouchCount ++;
-
-            DBG("g_ValidTouchCount = %d\n", g_ValidTouchCount);
-        }
-#endif //CONFIG_ENABLE_COUNT_REPORT_RATE
+        
+        input_sync(g_InputDevice);
     }
-
-    TouchHandleEnd: 
-    	
-    DBG("*** %s() *** mutex_unlock(&g_Mutex)\n", __func__);  // add for debug
-    mutex_unlock(&g_Mutex);
 }
 
 //------------------------------------------------------------------------------//
 
 #ifdef CONFIG_ENABLE_GESTURE_WAKEUP
-extern struct i2c_client *g_I2cClient;
-void DrvFwCtrlOpenGestureWakeup(u32 *pMode)
+
+void DrvFwCtrlOpenGestureWakeup(u16 nMode)
 {
-    u8 szDbBusTxData[4] = {0};
+    u8 szDbBusTxData[3] = {0};
     u32 i = 0;
     s32 rc;
 
     DBG("*** %s() ***\n", __func__);
 
-    DBG("wakeup mode 0 = 0x%x\n", pMode[0]);
-    DBG("wakeup mode 1 = 0x%x\n", pMode[1]);
+    PRINTF_ERR("wakeup mode = 0x%x\n", nMode);
 
-#ifdef CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-    szDbBusTxData[0] = 0x59;
-    szDbBusTxData[1] = 0x00;
-    szDbBusTxData[2] = ((pMode[1] & 0xFF000000) >> 24);
-    szDbBusTxData[3] = ((pMode[1] & 0x00FF0000) >> 16);
-
-    while (i < 5)
-    {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 4);
-        if (rc > 0)
-        {
-            DBG("Enable gesture wakeup index 0 success\n");
-            break;
-        }
-
-        i++;
-    }
-    if (i == 5)
-    {
-        DBG("Enable gesture wakeup index 0 failed\n");
-    }
-
-    szDbBusTxData[0] = 0x59;
-    szDbBusTxData[1] = 0x01;
-    szDbBusTxData[2] = ((pMode[1] & 0x0000FF00) >> 8);
-    szDbBusTxData[3] = ((pMode[1] & 0x000000FF) >> 0);
-	
-    while (i < 5)
-    {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 4);
-        if (rc > 0)
-        {
-            DBG("Enable gesture wakeup index 1 success\n");
-            break;
-        }
-
-        i++;
-    }
-    if (i == 5)
-    {
-        DBG("Enable gesture wakeup index 1 failed\n");
-    }
-
-    szDbBusTxData[0] = 0x59;
-    szDbBusTxData[1] = 0x02;
-    szDbBusTxData[2] = ((pMode[0] & 0xFF000000) >> 24);
-    szDbBusTxData[3] = ((pMode[0] & 0x00FF0000) >> 16);
-    
-    while (i < 5)
-    {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 4);
-        if (rc > 0)
-        {
-            DBG("Enable gesture wakeup index 2 success\n");
-            break;
-        }
-
-        i++;
-    }
-    if (i == 5)
-    {
-        DBG("Enable gesture wakeup index 2 failed\n");
-    }
-
-    szDbBusTxData[0] = 0x59;
-    szDbBusTxData[1] = 0x03;
-    szDbBusTxData[2] = ((pMode[0] & 0x0000FF00) >> 8);
-    szDbBusTxData[3] = ((pMode[0] & 0x000000FF) >> 0);
-    
-    while (i < 5)
-    {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 4);
-        if (rc > 0)
-        {
-            DBG("Enable gesture wakeup index 3 success\n");
-            break;
-        }
-
-        i++;
-    }
-    if (i == 5)
-    {
-        DBG("Enable gesture wakeup index 3 failed\n");
-    }
-
-    g_GestureWakeupFlag = 1; // gesture wakeup is enabled
-
-#else
-	
     szDbBusTxData[0] = 0x58;
-    szDbBusTxData[1] = ((pMode[0] & 0x0000FF00) >> 8);
-    szDbBusTxData[2] = ((pMode[0] & 0x000000FF) >> 0);
+    szDbBusTxData[1] = (nMode >> 8) & 0xFF;
+    szDbBusTxData[2] = nMode & 0xFF;
 
     while (i < 5)
     {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
         rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 3);
+        
         if (rc > 0)
         {
             DBG("Enable gesture wakeup success\n");
             break;
         }
 
+        mdelay(10);
         i++;
     }
+    
     if (i == 5)
+    {
+        DBG("Enable gesture wakeup failed\n");		
+    }
+/*
+    rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 3);
+    if (rc < 0)
     {
         DBG("Enable gesture wakeup failed\n");
     }
-
+    else
+    {
+        DBG("Enable gesture wakeup success\n");
+    }
+*/    
+    DrvPlatformLyrEnableFingerTouchReport();
+    DrvPlatformLyrEnableFingerTouchIrqWake();
     g_GestureWakeupFlag = 1; // gesture wakeup is enabled
-#endif //CONFIG_SUPPORT_64_TYPES_GESTURE_WAKEUP_MODE
-
-	//add for phone in sleep can't wakeup
-	if (device_may_wakeup(&g_I2cClient->dev))
-	{	
-		enable_irq_wake(g_I2cClient->irq);
-	} 
 }
 
 void DrvFwCtrlCloseGestureWakeup(void)
 {
-    DBG("*** %s() ***\n", __func__);
-
-	//add for phone in sleep can't wakeup
-	if (device_may_wakeup(&g_I2cClient->dev))
-	{
-		disable_irq_wake(g_I2cClient->irq);
-	}
-
-    g_GestureWakeupFlag = 0; // gesture wakeup is disabled
-}
-
-#ifdef CONFIG_ENABLE_GESTURE_DEBUG_MODE
-void DrvFwCtrlOpenGestureDebugMode(u8 nGestureFlag)
-{
-    u8 szDbBusTxData[3] = {0};
-    s32 rc;
+//    u8 szDbBusTxData[3] = {0};
+//    s32 rc;
 
     DBG("*** %s() ***\n", __func__);
-
-    DBG("Gesture Flag = 0x%x\n", nGestureFlag);
-
-    szDbBusTxData[0] = 0x30;
-    szDbBusTxData[1] = 0x01;
-    szDbBusTxData[2] = nGestureFlag;
-
-    mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-    rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 3);
-    if (rc < 0)
-    {
-        DBG("Enable gesture debug mode failed\n");
-    }
-    else
-    {
-        g_GestureDebugMode = 1; // gesture debug mode is enabled
-
-        DBG("Enable gesture debug mode success\n");
-    }
-}
-
-void DrvFwCtrlCloseGestureDebugMode(void)
-{
-    u8 szDbBusTxData[3] = {0};
-    s32 rc;
-
-    DBG("*** %s() ***\n", __func__);
-
-    szDbBusTxData[0] = 0x30;
+/*   
+    szDbBusTxData[0] = 0x58;
     szDbBusTxData[1] = 0x00;
     szDbBusTxData[2] = 0x00;
 
-    mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
     rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 3);
     if (rc < 0)
     {
-        DBG("Disable gesture debug mode failed\n");
+        DBG("Disable gesture wakeup failed\n");
     }
     else
     {
-        g_GestureDebugMode = 0; // gesture debug mode is disabled
-
-        DBG("Disable gesture debug mode success\n");
+        DBG("Disable gesture wakeup success\n");
     }
+*/
+    DrvPlatformLyrDisableFingerTouchIrqWake();
+    g_GestureWakeupFlag = 0; // gesture wakeup is disabled
 }
-#endif //CONFIG_ENABLE_GESTURE_DEBUG_MODE
 
 #ifdef CONFIG_ENABLE_GESTURE_INFORMATION_MODE
 static void _DrvFwCtrlCoordinate(u8 *pRawData, u32 *pTranX, u32 *pTranY)
@@ -5367,6 +4105,7 @@ static void _DrvFwCtrlCoordinate(u8 *pRawData, u32 *pTranX, u32 *pTranY)
         DBG("[%s]: [x,y]=[%d,%d]\n", __func__, nX, nY);
         DBG("[%s]: point[x,y]=[%d,%d]\n", __func__, *pTranX, *pTranY);
     }
+
 }
 #endif //CONFIG_ENABLE_GESTURE_INFORMATION_MODE
 
@@ -5374,41 +4113,24 @@ static void _DrvFwCtrlCoordinate(u8 *pRawData, u32 *pTranX, u32 *pTranY)
 
 //------------------------------------------------------------------------------//
 
+#ifdef CONFIG_ENABLE_FIRMWARE_DATA_LOG
+
 u16 DrvFwCtrlChangeFirmwareMode(u16 nMode)
 {
     u8 szDbBusTxData[2] = {0};
-    u32 i = 0;
-    s32 rc;
 
-    DBG("*** %s() *** nMode = 0x%x\n", __func__, nMode);
-
-    _gIsDisableFinagerTouch = 1; // Disable finger touch ISR handling temporarily for device driver can send change firmware mode i2c command to firmware. 
+    DBG("*** %s() ***\n", __func__);
 
     szDbBusTxData[0] = 0x02;
     szDbBusTxData[1] = (u8)nMode;
 
+    mdelay(20);
+    
     mutex_lock(&g_Mutex);
 
-    while (i < 5)
-    {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 2);
-        if (rc > 0)
-        {
-            DBG("Change firmware mode success\n");
-            break;
-        }
-
-        i++;
-    }
-    if (i == 5)
-    {
-        DBG("Change firmware mode failed, rc = %d\n", rc);
-    }
+    IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 2);
 
     mutex_unlock(&g_Mutex);
-
-    _gIsDisableFinagerTouch = 0;
 
     return nMode;
 }
@@ -5417,39 +4139,17 @@ void DrvFwCtrlGetFirmwareInfo(FirmwareInfo_t *pInfo)
 {
     u8 szDbBusTxData[1] = {0};
     u8 szDbBusRxData[8] = {0};
-    u32 i = 0;
-    s32 rc;
     
     DBG("*** %s() ***\n", __func__);
-
-    _gIsDisableFinagerTouch = 1; // Disable finger touch ISR handling temporarily for device driver can send get firmware info i2c command to firmware. 
 
     szDbBusTxData[0] = 0x01;
 
     mutex_lock(&g_Mutex);
     
-    while (i < 5)
-    {
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 1);
-        if (rc > 0)
-        {
-            DBG("Get firmware info IicWriteData() success\n");
-        }
-        mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-        rc = IicReadData(SLAVE_I2C_ID_DWI2C, &szDbBusRxData[0], 8);
-        if (rc > 0)
-        {
-            DBG("Get firmware info IicReadData() success\n");
-            break;
-        }
-
-        i++;
-    }
-    if (i == 5)
-    {
-        DBG("Get firmware info failed, rc = %d\n", rc);
-    }
+    mdelay(300);
+    IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 1);
+    mdelay(20);
+    IicReadData(SLAVE_I2C_ID_DWI2C, &szDbBusRxData[0], 8);
 
     mutex_unlock(&g_Mutex);
     
@@ -5467,39 +4167,35 @@ void DrvFwCtrlGetFirmwareInfo(FirmwareInfo_t *pInfo)
     pInfo->nLogModePacketLength = (szDbBusRxData[3]<<8) + szDbBusRxData[4];
 
     DBG("pInfo->nFirmwareMode=0x%x, pInfo->nLogModePacketHeader=0x%x, pInfo->nLogModePacketLength=%d, pInfo->nIsCanChangeFirmwareMode=%d\n", pInfo->nFirmwareMode, pInfo->nLogModePacketHeader, pInfo->nLogModePacketLength, pInfo->nIsCanChangeFirmwareMode);
-
-    _gIsDisableFinagerTouch = 0;
 }
 
 void DrvFwCtrlRestoreFirmwareModeToLogDataMode(void)
 {
-    DBG("*** %s() g_IsSwitchModeByAPK = %d ***\n", __func__, g_IsSwitchModeByAPK);
-
-    if (g_IsSwitchModeByAPK == 1)
-    {
-        FirmwareInfo_t tInfo;
+    FirmwareInfo_t tInfo;
     
-        memset(&tInfo, 0x0, sizeof(FirmwareInfo_t));
+    DBG("*** %s() ***\n", __func__);
 
-        DrvFwCtrlGetFirmwareInfo(&tInfo);
+    memset(&tInfo, 0x0, sizeof(FirmwareInfo_t));
 
-        DBG("g_FirmwareMode = 0x%x, tInfo.nFirmwareMode = 0x%x\n", g_FirmwareMode, tInfo.nFirmwareMode);
+    DrvFwCtrlGetFirmwareInfo(&tInfo);
 
-        // Since reset_hw() will reset the firmware mode to demo mode, we must reset the firmware mode again after reset_hw().
-        if (g_FirmwareMode == FIRMWARE_MODE_DEBUG_MODE && FIRMWARE_MODE_DEBUG_MODE != tInfo.nFirmwareMode)
-        {
-            g_FirmwareMode = DrvFwCtrlChangeFirmwareMode(FIRMWARE_MODE_DEBUG_MODE);
-        }
-        else if (g_FirmwareMode == FIRMWARE_MODE_RAW_DATA_MODE && FIRMWARE_MODE_RAW_DATA_MODE != tInfo.nFirmwareMode)
-        {
-            g_FirmwareMode = DrvFwCtrlChangeFirmwareMode(FIRMWARE_MODE_RAW_DATA_MODE);
-        }
-        else
-        {
-            DBG("firmware mode is not restored\n");
-        }
+    DBG("g_FirmwareMode = 0x%x, tInfo.nFirmwareMode = 0x%x\n", g_FirmwareMode, tInfo.nFirmwareMode);
+
+    // Since reset_hw() will reset the firmware mode to demo mode, we must reset the firmware mode again after reset_hw().
+    if (g_FirmwareMode == FIRMWARE_MODE_DEBUG_MODE && FIRMWARE_MODE_DEBUG_MODE != tInfo.nFirmwareMode)
+    {
+        g_FirmwareMode = DrvFwCtrlChangeFirmwareMode(FIRMWARE_MODE_DEBUG_MODE);
+    }
+    else if (g_FirmwareMode == FIRMWARE_MODE_RAW_DATA_MODE && FIRMWARE_MODE_RAW_DATA_MODE != tInfo.nFirmwareMode)
+    {
+        g_FirmwareMode = DrvFwCtrlChangeFirmwareMode(FIRMWARE_MODE_RAW_DATA_MODE);
+    }
+    else
+    {
+        DBG("firmware mode is not restored\n");
     }
 }
+#endif //CONFIG_ENABLE_FIRMWARE_DATA_LOG
 
 //------------------------------------------------------------------------------//
 
@@ -5509,7 +4205,7 @@ void DrvFwCtrlCheckFirmwareUpdateBySwId(void)
 {
     if (g_ChipType == CHIP_TYPE_MSG21XXA)   
     {
-        //_DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId();
+        _DrvFwCtrlMsg21xxaCheckFirmwareUpdateBySwId();
     }
     else if (g_ChipType == CHIP_TYPE_MSG22XX)    
     {
@@ -5524,187 +4220,3 @@ void DrvFwCtrlCheckFirmwareUpdateBySwId(void)
 #endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
 
 //------------------------------------------------------------------------------//
-
-#ifdef CONFIG_ENABLE_PROXIMITY_DETECTION
-
-s32 DrvFwCtrlEnableProximity(void)
-{
-    u8 szDbBusTxData[4] = {0};
-    s32 rc;
-
-    DBG("*** %s() ***\n", __func__);
-
-    szDbBusTxData[0] = 0x52;
-    szDbBusTxData[1] = 0x00;
-    
-    if (g_ChipType == CHIP_TYPE_MSG21XX)
-    {
-        szDbBusTxData[2] = 0x62; 
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG21XXA || g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        szDbBusTxData[2] = 0x4a; 
-    }
-    else
-    {
-        DBG("*** Un-recognized chip type = 0x%x ***\n", g_ChipType);
-        return -1;
-    }
-    
-    szDbBusTxData[3] = 0xa0;
-    
-    mutex_lock(&g_Mutex);
-
-    mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-    rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 4);
-    if (rc > 0)
-    {
-        g_EnableTpProximity = 1;
-    
-        DBG("Enable proximity detection success\n");
-    }
-    else
-    {
-        DBG("Enable proximity detection failed\n");
-    }
-
-    mutex_unlock(&g_Mutex);
-
-    return rc;
-}
-
-s32 DrvFwCtrlDisableProximity(void)
-{
-    u8 szDbBusTxData[4] = {0};
-    s32 rc;
-
-    DBG("*** %s() ***\n", __func__);
-
-    szDbBusTxData[0] = 0x52;
-    szDbBusTxData[1] = 0x00;
-
-    if (g_ChipType == CHIP_TYPE_MSG21XX)
-    {
-        szDbBusTxData[2] = 0x62; 
-    }
-    else if (g_ChipType == CHIP_TYPE_MSG21XXA || g_ChipType == CHIP_TYPE_MSG22XX)
-    {
-        szDbBusTxData[2] = 0x4a; 
-    }
-    else
-    {
-        DBG("*** Un-recognized chip type = 0x%x ***\n", g_ChipType);
-        return -1;
-    }
-
-    szDbBusTxData[3] = 0xa1;
-    
-    mutex_lock(&g_Mutex);
-
-    mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-    rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 4);
-    if (rc > 0)
-    {
-        g_EnableTpProximity = 0;
-
-        DBG("Disable proximity detection success\n");
-    }
-    else
-    {
-        DBG("Disable proximity detection failed\n");
-    }
-
-#if defined(CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM) || defined(CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM)
-    g_FaceClosingTp = 0;
-#endif //CONFIG_TOUCH_DRIVER_RUN_ON_SPRD_PLATFORM || CONFIG_TOUCH_DRIVER_RUN_ON_QCOM_PLATFORM
-
-    mutex_unlock(&g_Mutex);
-
-    return rc;
-}
-
-#endif //CONFIG_ENABLE_PROXIMITY_DETECTION
-
-//------------------------------------------------------------------------------//
-
-#ifdef CONFIG_ENABLE_CHARGER_DETECTION
-
-void DrvFwCtrlChargerDetection(u8 nChargerStatus)
-{
-    u32 i = 0;
-    u8 szDbBusTxData[2] = {0};
-    s32 rc = 0;
-
-    DBG("*** %s() ***\n", __func__);
-
-    DBG("_gChargerPlugIn = %d, nChargerStatus = %d, g_ForceUpdate = %d\n", _gChargerPlugIn, nChargerStatus, g_ForceUpdate);
-
-    mutex_lock(&g_Mutex);
-    
-    szDbBusTxData[0] = 0x09;
-
-    if (nChargerStatus) // charger plug in
-    {
-        if (_gChargerPlugIn == 0 || g_ForceUpdate == 1)
-        {
-          	szDbBusTxData[1] = 0xA5;
-            
-            while (i < 5)
-            {
-                mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-                rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 2);
-                if (rc > 0)
-                {
-                    _gChargerPlugIn = 1;
-
-                    DBG("Update status for charger plug in success.\n");
-                    break;
-                }
-
-                i ++;
-            }
-            if (i == 5)
-            {
-                DBG("Update status for charger plug in failed, rc = %d\n", rc);
-            }
-
-            g_ForceUpdate = 0; // Clear flag after force update charger status
-        }
-    }
-    else  // charger plug out
-    {
-        if (_gChargerPlugIn == 1 || g_ForceUpdate == 1)
-        {
-          	szDbBusTxData[1] = 0x5A;
-            
-            while (i < 5)
-            {
-                mdelay(I2C_WRITE_COMMAND_DELAY_FOR_FIRMWARE);
-                rc = IicWriteData(SLAVE_I2C_ID_DWI2C, &szDbBusTxData[0], 2);
-                if (rc > 0)
-                {
-                    _gChargerPlugIn = 0;
-
-                    DBG("Update status for charger plug out success.\n");
-                    break;
-                }
-                
-                i ++;
-            }
-            if (i == 5)
-            {
-                DBG("Update status for charger plug out failed, rc = %d\n", rc);
-            }
-
-            g_ForceUpdate = 0; // Clear flag after force update charger status
-        }
-    }	
-
-    mutex_unlock(&g_Mutex);
-}	
-
-#endif //CONFIG_ENABLE_CHARGER_DETECTION
-
-//------------------------------------------------------------------------------//
-
-#endif //CONFIG_ENABLE_TOUCH_DRIVER_FOR_SELF_IC

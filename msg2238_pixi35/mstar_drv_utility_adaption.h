@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2006-2014 MStar Semiconductor, Inc.
+// Copyright (c) 2006-2012 MStar Semiconductor, Inc.
 // All rights reserved.
 //
 // Unless otherwise stipulated in writing, any and all information contained
@@ -21,6 +21,7 @@
  *
  * @brief   This file defines the interface of touch screen
  *
+ * @version v2.2.0.0
  *
  */
 
@@ -74,34 +75,30 @@
 
 #ifdef CONFIG_ENABLE_DMA_IIC
 extern void DmaAlloc(void);
-extern void DmaReset(void);
 extern void DmaFree(void);
 #endif //CONFIG_ENABLE_DMA_IIC
 extern u16  RegGet16BitValue(u16 nAddr);
 extern u8   RegGetLByteValue(u16 nAddr);
 extern u8   RegGetHByteValue(u16 nAddr);
-extern void RegGetXBitValue(u16 nAddr, u8 * pRxData, u16 nLength, u16 nMaxI2cLengthLimit);
 extern void RegSet16BitValue(u16 nAddr, u16 nData);
 extern void RegSetLByteValue(u16 nAddr, u8 nData);
 extern void RegSetHByteValue(u16 nAddr, u8 nData);
 extern void RegSet16BitValueOn(u16 nAddr, u16 nData);
 extern void RegSet16BitValueOff(u16 nAddr, u16 nData);
+//merged by pangle at 20150228 begin
 extern u16  RegGet16BitValueByAddressMode(u16 nAddr, AddressMode_e eAddressMode);
 extern void RegSet16BitValueByAddressMode(u16 nAddr, u16 nData, AddressMode_e eAddressMode);
 extern void RegMask16BitValue(u16 nAddr, u16 nMask, u16 nData, AddressMode_e eAddressMode);
-extern s32 DbBusEnterSerialDebugMode(void);
+//merged by pangle at 20150228 end
+extern void DbBusEnterSerialDebugMode(void);
 extern void DbBusExitSerialDebugMode(void);
 extern void DbBusIICUseBus(void);
 extern void DbBusIICNotUseBus(void);
 extern void DbBusIICReshape(void);
 extern void DbBusStopMCU(void);
 extern void DbBusNotStopMCU(void);
-extern void DbBusResetSlave(void);
-extern void DbBusWaitMCU(void);
 extern s32 IicWriteData(u8 nSlaveId, u8* pBuf, u16 nSize);
 extern s32 IicReadData(u8 nSlaveId, u8* pBuf, u16 nSize);
-extern s32 IicSegmentReadDataByDbBus(u8 nRegBank, u8 nRegAddr, u8* pBuf, u16 nSize, u16 nMaxI2cLengthLimit);
-extern s32 IicSegmentReadDataBySmBus(u16 nAddr, u8* pBuf, u16 nSize, u16 nMaxI2cLengthLimit);
 extern void mstpMemSet(void *pDst, s8 nVal, u32 nSize);
 extern void mstpMemCopy(void *pDst, void *pSource, u32 nSize);
 extern void mstpDelay(u32 nTime);
